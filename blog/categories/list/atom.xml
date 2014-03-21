@@ -1,0 +1,925 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: List | Patrick Yoon]]></title>
+  <link href="http://cluno.github.io/blog/categories/list/atom.xml" rel="self"/>
+  <link href="http://cluno.github.io/"/>
+  <updated>2014-03-21T22:38:45+09:00</updated>
+  <id>http://cluno.github.io/</id>
+  <author>
+    <name><![CDATA[Patrick Yoon]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 16장]]></title>
+    <link href="http://cluno.github.io/blog/2013/04/23/programming-in-scala-16-jang/"/>
+    <updated>2013-04-23T01:17:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/04/23/programming-in-scala-16-jang</id>
+    <content type="html"><![CDATA[<p>3주간 꾸역꾸역 16장 리스트를 정리해보았습니다. 정리를 해도 역시나 볼때마다 새롭네요. (&ndash;_&ndash;) 이하 편의상 음슴체로 갑니다.</p>
+
+<!-- more -->
+
+
+<h1>16 Working with Lists</h1>
+
+<h2>16.1 List literals</h2>
+
+<p>리스트 리터럴의 예</p>
+
+<!-- more -->
+
+
+<p>``` scala
+val fruit = List(&ldquo;apples&rdquo;, &ldquo;oranges&rdquo;, &ldquo;pears&rdquo;)
+val nums = List(1, 2, 3, 4)
+val diag3 = List(</p>
+
+<pre><code>List(1, 0, 0),  
+List(0, 1, 0),  
+List(0, 0, 1),  
+</code></pre>
+
+<p>) <br/>
+val empty = List()
+```</p>
+
+<p>리스트가 array와  다른 점 &ndash; 1) 리스트는 Immutable 함. 2) 재귀적 구조를 가질 수 있음. (예. Linked List)</p>
+
+<h2>16.2 The List type</h2>
+
+<p>리스트는 동질성을 띔, 모든 리스트의 요소들은 같은 타입임.</p>
+
+<p><code>List[T]</code> &ndash; 타입 T 요소를 가지는 리스트 타입.</p>
+
+<p>Scala에서 리스트 타입은 공변함(covariant) &ndash; 즉 <code>S</code>와 <code>T</code> 각 한 쌍의 타입에 대해, <code>S</code>가 <code>T</code>의 하위타입이면 <code>List[S]</code>도 <code>List[T]</code>의 하위타입이 됨. (예. <code>List[String]</code>은 <code>List[Object]</code>의 하위타입)</p>
+
+<p>빈 리스트 타입은 <code>List[Nothing]</code>. Scala에서 모든 타입 <code>T</code>에 대해 <code>List[Nothing]</code>은  <code>List[T]</code>의 하위 타입. 따라서, 다음과 같은 코드도 허용됨.</p>
+
+<p><code>scala
+val xs: List[String] = List()
+</code></p>
+
+<h2>16.3 Constructing lists</h2>
+
+<p>모든 리스트는 <code>Nil</code>과 <code>::</code>(cons라 발음)의 빌딩 블럭으로 만들 수 있음. <code>Nil</code>은 공백 리스트. 중위표기 연산자(infix operator)인 <code>::</code>는 전방에서 리스트를 확장함.</p>
+
+<p><code>x::xs</code> &ndash; 첫째 요소가 <code>x</code>이고 이어지는 요소가 <code>xs</code>인 리스트</p>
+
+<p>따라서, 이전 리스트는 다음과 같이 정의될 수 있음.</p>
+
+<p>``` scala
+val fruit = &ldquo;apples&rdquo; :: (&ldquo;oranges&rdquo; :: (&ldquo;pears&rdquo; :: Nil))
+val nums  = 1 :: (2 :: (3 :: (4 :: Nil)))
+val diag3 = (1 :: (0 :: (0 :: Nil))) ::</p>
+
+<pre><code>(0 :: (1 :: (0 :: Nil))) ::
+(0 :: (0 :: (1 :: Nil))) :: Nil
+</code></pre>
+
+<p>val empty = Nil
+```</p>
+
+<h2>16. 4 Basic operations on lists</h2>
+
+<p>리스트 연산은 다음의 3가지 용어로 설명될 수 있음.</p>
+
+<ul>
+<li>head &ndash; 리스트의 첫째 요소를 반환</li>
+<li>tail &ndash; 첫째를 제외한 모든 요소들의 리스트를 반환</li>
+<li>isEmpty &ndash; 비어있는 리스트인 경우 true를 반환</li>
+</ul>
+
+
+<p>이런 연산은 <code>List</code>클래스의 메소드로 정의되어 있음 (이상 <a href="http://www.scala-lang.org/api/current/index.html#scala.collection.immutable.List">API</a> 참조). 몇 가지 예는 아래와 같음.</p>
+
+<pre><code>empty.isEmpty       returns true
+fruit.isEmtpy       returns false 
+fruit.head          returns "apples"
+fruit.tail.head     returns "apples"
+diag3.head          returns List(1,0,0)
+</code></pre>
+
+<p><code>head</code>와 <code>tail</code> 메소드는 빈 리스트가 아닌 경우에만 정의됨.</p>
+
+<pre><code>Nil.head    // java.util.NoSuchElementException: head of empty list
+</code></pre>
+
+<p>리스트가 어떻게 처리될 수 있는지에 대한 예제로 리스트 요소들을 오름차순으로 정렬해 봄.</p>
+
+<p>가장 간단한 방법은 삽입 정렬(insertion sort)임.</p>
+
+<p>삽입 정렬 &ndash; <code>x::xs</code> 리스트를 정렬하기 위해, 나머지 <code>xs</code>를 정렬하고, 첫째 요소 <code>x</code>를 결과의 오른쪽 위치에 삽입하는 방법. 빈 리스트 정렬할 경우는 빈 리스트를 얻게 됨.</p>
+
+<p>``` scala
+def isort(xs: List[Int]): List[Int] =</p>
+
+<pre><code>if (xs.isEmpty) Nil
+else insert(xs.head, isort(xs.tail))
+</code></pre>
+
+<p>def insert(x: Int, xs: List[Int]): List[Int] =</p>
+
+<pre><code>if (xs.isEmpty || x &lt;= xs.head) x :: xs
+else xs.head :: insert(x, xs.tail)
+</code></pre>
+
+<p>```</p>
+
+<h2>16.5 List patterns</h2>
+
+<p>패턴 매칭을 사용해 리스트를 분리할 수 있음.</p>
+
+<p><code>scala
+val List(a, b, c) = fruit
+// a: String = apples
+// b: String = oranges
+// c: String = pears
+</code></p>
+
+<p>리스트의 길이를 모를 경우에는 <code>::</code>를 사용해서 매칭 &ndash;  <code>a :: b :: rest</code> (a와 b 그리고 2개 이상의 리스트는  <code>rest</code>로 매칭)</p>
+
+<p><code>scala
+val a :: b :: rest = fruit
+// a: String = apples
+// b: String = oranges
+// rest: List[String] = List(pears)
+</code></p>
+
+<h4>List 패턴 매칭에 대해</h4>
+
+<blockquote><p><code>List(…)</code> 이나 <code>::</code> 도 패턴임. <code>List(…)</code>는 라이브러리에 정의된 extractor 패턴의 인스턴스임 (26장에서 설명). cons 패턴인 <code>x::xs</code>은 중위 연산 (infix operation) 패턴의 특이한 경우임.  중위 연산도 메소드 호출과 동일함. <code>p op q</code> 는 <code>op(p, q)</code>와 같은데, 생성자 패턴처럼 다뤄지는 거임. <code>x::xs</code>는 <code>::(x, xs)</code>처럼 다룸. 즉 <code>::</code>라는 이름의 클래스가 있다는 것을 알 수 있음. 실제 빈 리스트를 만드는 <code>scala.::</code>라는 이름을 지닌 클래스가 있음. Scala에서 <code>::</code>가 두 개 존재함 &ndash; 하나는 scala 패키지 내에 클래스로 있고, 또 하나는 List 클래스 내에 메소드로 있음. 이상, 22장에서 List 클래스가 어떻게 구현되었는지를 살펴볼 것임.</p></blockquote>
+
+<p>패턴 매칭으로 기본 메소드로(<code>head</code>, <code>tail</code> 그리고 <code>isEmpty</code> 등)로 작성된 코드를 대체할 수 있음.</p>
+
+<p>``` scala
+def isort(xs: List[Int]): List[Int] = xs match {</p>
+
+<pre><code>case List() =&gt; List()
+case x :: xs1 =&gt; insert(x, isort(xs1))
+</code></pre>
+
+<p>}</p>
+
+<p>def insert(x: Int, xs: List[Int]): List[Int] = xs match {</p>
+
+<pre><code>case List() =&gt; List(x)
+case y :: ys =&gt; if (x &lt;= y) x :: xs 
+    else y :: insert(x, ys)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위와 같이 패턴 매칭으로 좀 더 간결하고 분명한 코드를 작성할 수 있음.</p>
+
+<h2>16.6 First-order methods on class List</h2>
+
+<p>리스트 클래스의 일차 메소드에 대해 설명하겠음.</p>
+
+<p>일차(first-order)라는 것은 어떤 함수도 인자로 취하지 않는다는 것을 말함.</p>
+
+<h3>Concatenating two lists</h3>
+
+<p><code>:::</code>로 두 개의 리스트 연결함. <code>xs ::: ys</code>는 <code>xs</code> 다음에 <code>ys</code>가 오는 새 리스트를 만듦.</p>
+
+<p><code>scala
+List(1, 2) ::: List(3, 4, 5)    // List(1, 2, 3, 4, 5)
+List() ::: List(1, 2, 3)        // List(1, 2, 3)
+List(1, 2, 3) ::: List(4)       // List(1, 2, 3, 4)
+</code></p>
+
+<p><code>xs ::: ys ::: zs</code>는 <code>xs ::: (ys :::zs)</code>로 해석됨.</p>
+
+<h3>The Divide and Conquer principle</h3>
+
+<p>Concatenation(:::)은 직접 구현할 수도 있음. <code>append</code>라고 부르고 리스트 클래스 외부에 정의해 보겠음. 연결할 두 개의 리스트를 매개변수로 받아야 하고 리스트는 임의의 요소를 지님. 따라서, 다음과 같음.</p>
+
+<p><code>scala
+def append[T](xs: List[T], ys: List[T]): List[T]
+</code></p>
+
+<p><code>append</code>를 구현하기 위해 리스트와 같은 재귀적 데이터 구조를 이용하는 프로그램의 설계원리인 &ldquo;분할정복(divide and conquer)"을 기억해보는 것이 좋음.</p>
+
+<h4>Divide and conquer (분할 정복)</h4>
+
+<blockquote><p>리스트에 대한 대부분의 알고리즘은 먼저 입력 리스트를 패턴 매칭을 사용해 단순한 <code>case</code>들로 쪼개며, 이를 분할(divide)이라고 함. 그리고 각 <code>case</code>에 대한 결과를 구성함. 결과가 빈 리스트가 아닐 경우, 어떤 부분은 같은 알고리즘의 재귀적 호출로 인해 구성하는데, 이를 정복(conquer)이라고 함.</p></blockquote>
+
+<p>구현할 <code>append</code> 메소드에 이 원리를 적용하기 위해, 매치할 리스트를 결정해야 함. 경우의 수가 2가지 뿐이므로 단순한 편임.</p>
+
+<p>정복 단계에서는 두 입력 리스트의 모든 요소들로 이루어지는 리스트를 만들어야 함.</p>
+
+<p>리스트는 뒤에서 앞쪽으로 만들어지므로, <code>ys</code>는 그대로 남겨두지만 <code>xs</code>는 분해되어 <code>ys</code>에 앞에 삽입될 필요가 있음. 따라서,<code>xs</code>가  패턴매칭의 집중 대상이 됨.</p>
+
+<p>리스트에서 가장 흔한 패턴 매칭은 비어 있지 않은 리스트로부터 빈 리스트를 구별해내는 것임.</p>
+
+<p>이상, <code>append</code> 메소드는 다음과 같은 형식임.</p>
+
+<p>``` scala
+def append<a href="xs:%20List[T],%20ys:%20List[T]">T</a>: List[T] =</p>
+
+<pre><code>xs match {
+    case List() =&gt; // ??
+    case x :: xs1 =&gt; // ??
+}
+</code></pre>
+
+<p>```</p>
+
+<p>??을 채우기 위해, 먼저 <code>xs</code>가 빈 리스트인 경우, 연결 결과로 두 번째 리스트를 넘겨주게 됨.</p>
+
+<p>``` scala</p>
+
+<pre><code>case List() =&gt; ys
+</code></pre>
+
+<p>```</p>
+
+<p>다음으로 머리 <code>x</code> 와 꼬리 <code>xs1</code>로 이뤄지는 입력 리스트 <code>xs</code>가 오는 경우, 결과 역시 비어있지 않은 리스트임.</p>
+
+<p>비어있지 않은 리스트를 구성하기 위해서는 리스트의 머리와 꼬리가 무엇인지 알아야 함. 머리는 <code>x</code>라는 걸 이미 알고 있고, 꼬리는 첫 번째 리스트의 나머지 <code>xs1</code>와 두 번째 리스트인 <code>ys</code>로 구성됨.</p>
+
+<p>따라서 ?? 구현이 완료된 모습은 다음과 같음.</p>
+
+<p>``` scala
+def append<a href="xs:%20List[T],%20ys:%20List[T]">T</a>: List[T] =</p>
+
+<pre><code>xs match {
+    case List() =&gt; ys
+    case x :: xs1 =&gt; x :: append(xs1, ys)
+}
+</code></pre>
+
+<p>```</p>
+
+<h3>Taking the length of a list: length</h3>
+
+<p>length는 리스트의 길이는 계산함.</p>
+
+<p><code>scala
+List(1, 2, 3).length    // 3
+</code></p>
+
+<h3>Accessing the end of a list: init and last</h3>
+
+<p><code>last</code>는 리스트의 마지막 요소를 반환, <code>init</code>은 리스트의 첫째 요소를 반환.</p>
+
+<p><code>scala
+val abcde = List('a', 'b', 'c', 'd', 'e')
+abcde.last      // e
+abcde.init      // List(a, b, c, d)
+</code></p>
+
+<p><code>head</code>와 <code>tail</code>처럼 빈 리스트는 <code>init</code>과 <code>last</code> 메소드가 없음.</p>
+
+<p><code>scala
+List().init     // java.lang.UnsupportedOperationException
+List().last     // java.util.NoSuchElementException
+</code></p>
+
+<p>일정한 시간(constant time)에서 실행되는 <code>head</code>와 <code>tail</code>과 달리 <code>init</code>과 <code>last</code>는 결과를 계산하기 위해 전체 리스트를 횡단함. 가급적 마지막 요소보다는 리스트의 머리를 사용해서 데이터를 조직하는 것이 좋음.</p>
+
+<h3>Reversing lists: reverse</h3>
+
+<p>리스트의 마지막을 자주 억세스하는 알고리즘의 경우, 리스트를 뒤집어 그 결과로 작업하는 것이 좋음.</p>
+
+<p><code>scala
+abcde.reverse   // List(e, d, c, b, a)
+</code></p>
+
+<p><code>reverse</code> 메소드는 새 리스트는 반환함. 리스트는 불변성을 띠기 때문에 원본 데이터는 변하지 않음</p>
+
+<p>``` scala</p>
+
+<pre><code>abcde           // List(a, b, c, d, e)
+</code></pre>
+
+<p>```</p>
+
+<p><code>reverse</code>, <code>init</code>, <code>last</code> 연산은 추론 가능한 몇가지 계산 법칙을 만족함.</p>
+
+<p>1) <code>reverse</code>는 자신의 반전임.</p>
+
+<pre><code>xs.reverse.reverse equals  xs
+</code></pre>
+
+<p>2) <code>reverse</code>는 <code>init</code>은 <code>tail</code>로 <code>last</code>는 <code>head</code>로 돌림. (반전된 요소는 예외)</p>
+
+<pre><code>xs.reverse.init equals xs.tail.reverse
+xs.reverse.tail equals xs.init.reverse
+xs.reverse.head equals xs.last
+xs.reverse.last equals xs.head
+</code></pre>
+
+<p>반전은 concatenation(<code>:::</code>)으로 구현될 수 있음.</p>
+
+<p>``` scala
+def rev<a href="xs:%20List[T]">T</a>: List[T] = xs match {</p>
+
+<pre><code>case List() =&gt; xs
+case x :: xs1 =&gt; rev(xs1) ::: List(x)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위 메소드는 효율이 좋지 못함. <code>rev</code>의 복잡도는 리스트 <code>xs</code>가 길이 n을 가질 때, n번의 rev에 대한 재귀호출이 있으므로 복잡도는 다음과 같음.</p>
+
+<pre><code>n + (n - 1) + … + 1 = (1 + n) * n / 2
+</code></pre>
+
+<p>즉, <code>rev</code>의 복잡도는 입력 인자의 길이 n을 가지는 2차 방정식임. 선형 복잡도를 지니는 <code>reverse</code> 메소드에 비해 속도가 떨어짐. 섹션4에서 속도를 높이는 방법을 볼 것임.</p>
+
+<h3>Prefixes and suffixes: drop, take, and splitAt</h3>
+
+<p><code>drop</code>과 <code>take</code>는 리스트의 prefix나 혹은 suffix를 반환하는<code>tail</code>과 <code>init</code>의 일반적인 형태임.</p>
+
+<p><code>xs take n</code> &ndash; 리스트 xs의 처음 n개의 요소를 반환. n이 리스트 xs의 길이보다 클 경우, 전체 리스트 xs를 반환</p>
+
+<p><code>xs drop n</code> &ndash; 리스트 xs의 처음 n개를 제외한 리스트 요소들을 반환. n이 리스트 xs의 길이보다 작을 경우, 빈 리스트를 반환</p>
+
+<p><code>splitAt</code> &ndash; 주어진 인덱스에서 리스트를 분할, 두 개의 리스트 쌍을 반환. 그러나 리스트를 두 번 횡단하지는 않음</p>
+
+<p>``` scala</p>
+
+<pre><code>xs splitAt n    equals  (xs take n, xs drop n)
+</code></pre>
+
+<p>```</p>
+
+<p>예제</p>
+
+<p><code>scala
+abcde   take 2      // List(a, b)
+abcde   drop 2      // List(c, d, e)
+abcde   splitAt 2   // (List(a, b), List(c, d, e))
+</code></p>
+
+<h3>Element selection: apply and incides</h3>
+
+<p><code>apply</code> &ndash; 랜덤 요소 선택, array가 아닌 리스트에서는 흔하지 않은 연산.</p>
+
+<p><code>scala
+abcde apply 2   // c
+</code></p>
+
+<p>메소드를 호출할 때 함수 위치에 객체가 나타나는 경우, <code>apply</code> 메소드가 암묵적으로 삽입됨.</p>
+
+<p><code>scala
+abcde(2)        // c
+</code></p>
+
+<p><code>xs(n)</code>은 인덱스 n에 대해 시간에 비례. <code>apply</code>는 <code>drop</code>과 <code>head</code>의 조합으로 정의됨.</p>
+
+<p><code>scala
+xs apply n equals (xs drop n).head
+</code></p>
+
+<p><code>indices</code> &ndash; 주어진 리스트의 모든 유효한 인덱스들로 구성된 리스트를 반환함.</p>
+
+<p><code>scala
+abcde.indices   // Range(0, 1, 2, 3, 4)
+</code></p>
+
+<h3>Flattening a list of lists: flatten</h3>
+
+<p><code>flatten</code> &ndash; 리스트의 리스트를 하나로 합침.</p>
+
+<p><code>scala
+List(List(1, 2), List(3), List(), List(4, 5)).flatten   // List(1, 2, 3, 4, 5)
+fruit.map(_.toCharArray).flatten     // List(a, p, p, l, e, s, o, r, a, n, g, e, s, p, e, a, r, s)
+</code></p>
+
+<h3>Zipping lists: zip and unzip</h3>
+
+<p><code>zip</code> &ndash; 두 개의 리스트를 취해 한 쌍의 리스트로 구성함.</p>
+
+<p><code>scala
+abcde.indices zip abcde // IndexedSeq((0, a), (1, b), (2, c), (3, d), (4, e))
+</code></p>
+
+<p>길이가 다를 경우, 맞지 않는 것은 드랍됨.</p>
+
+<p><code>scala
+val zipped = abcde zip List(1, 2, 3) // List((a, 1), (b, 2), (c, 3))
+</code></p>
+
+<p><code>zipWithIndex</code> &ndash; 리스트를 그 인덱스와 zip함</p>
+
+<p><code>scala
+abcde.zipWithIndex // List((a, 0), (b, 1), (c, 2), (d, 3), (e, 4))
+</code></p>
+
+<p>튜플의 리스트도 리스트의 튜플로 역변환할 수 있음.</p>
+
+<p><code>scala
+zipped.unzip // (List(a, b, c), List(1, 2, 3))
+</code></p>
+
+<h3>Displaying lists: toString and mkString</h3>
+
+<p><code>toString</code> &ndash; 리스트의 canonical 문자열 표현</p>
+
+<p><code>xs mkString(pre, sep, post)</code> &ndash; 4개의 오퍼랜드를 취함</p>
+
+<pre><code>pre + xs(0) + sep + … + sep + xs(xs.length -1) + post
+</code></pre>
+
+<p><code>mkString</code> 메소드는 두 개의 오버로드된 형식이 있음.</p>
+
+<p>첫 번째는 구분자 문자열만 취함</p>
+
+<p><code>scala
+xs mkString seq equals xs mkString("", sep", "")
+</code></p>
+
+<p>두 번째는 모든 인자가 생략됨.</p>
+
+<p><code>scala
+xs.mkString equals xs mkString ""
+</code></p>
+
+<p>기타 몇 가지 예제</p>
+
+<p><code>scala
+abcde mkString ("[", ",", "]")          // String = [a, b, c, d, e]
+abcde mkString ""                       // String = abcde
+abcde mkString                          // String = abcde
+abcde mkString ("List(", ", ", ")")     // String = List(a, b, c, d, e)
+</code></p>
+
+<p><code>addString</code> &ndash; StringBuilder  객체에 구조화된 문자열을 추가하는 메소드. Java의 StringBuilder가 아님.</p>
+
+<p><code>scala
+val buf = new StringBuilder
+abcde addString(buf, "(", ";", ")")     // StringBuilder = (a;b;c;d;e)
+</code></p>
+
+<h3>Converting lists: iterator, toArray, copyToArray</h3>
+
+<p><code>toArray</code> &ndash; 리스트 데이터를 array 데이터로 변경, <code>toList</code> &ndash; array 데이터를 리스트 데이터로 변경</p>
+
+<p><code>scala
+val arr = abcde.toArray // Array(a, b, c, d, e)
+arr.toList               // List(a, b, c, d, e)
+</code></p>
+
+<p><code>copyToArray</code> &ndash; start 위치부터 array에 리스트 데이터를 복사. 북사 대상 array는 원본 리스트 만큼 충분히 커야함.</p>
+
+<p><code>scala
+val arr2 = new Array[Int](10)       // Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+List(1, 2, 3) copyToArray (arr2, 3)  // Array(0, 0, 0, 1, 2, 3, 0, 0, 0, 0)
+</code>
+<code>iterator</code> &ndash; 반복자를 이용해 리스트 요소에 억세스함.</p>
+
+<p><code>scala
+val it = abcde.iterator
+it.next         // a
+it.next         // b
+</code></p>
+
+<h3>Example: Merge sort</h3>
+
+<p>이상, 예제로 병할 정렬을 구현해보겠음. 병합 정렬 알고리즘은 다음과 같음</p>
+
+<ul>
+<li>리스트가 0개 혹은 1개의 요소를 가지고 있으면 이미 정렬된 거임.</li>
+<li>그 이상일 경우, 두 개의 하위 리스트로 분할함.</li>
+<li>각각의 하위 리스트는 sort 함수의 재귀호출에 의해 정렬되어 두 개의 정렬된 리스트를 병합(merge) 연산으로 합침.</li>
+</ul>
+
+
+<p>구현을 일반화시키기 위해 리스트의 타입과 각 요소들을 비교하는 함수는 오픈된 상태로 남겨둠. 궁극의 일반화(Generalization)를 위해 이 두 항목은 매개변수로 전달하는 거임.</p>
+
+<p>``` scala
+def msort<a href="less:%20(T,%20T">T</a> => Boolean) (xs: List[T]): List[T] = {</p>
+
+<pre><code>def merge(xs: List[T], ys: List[T]): List[T] = (xs, ys) match {
+    case (Nil, _) =&gt; ys
+    case (_, Nil) =&gt; xs
+    case (x :: xs1, y :: ys1) =&gt;
+        if(less(x, y) x :: merge(xs1, ys)
+            else y :: merge(xs, ys1)
+}
+
+val n = xs.length / 2
+if (n == 0) xs
+else {
+    val (ys, zs) = xs splitAt n
+    merge(msort(less)(ys), msort(less)(zs))
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>n이 입력 리스트의 길이일 때, msort의 복잡도는 <em>O(nlog(n))</em> 임. (※. 일반적인 병합 정렬의 복잡도임. 이하 자세한 설명은 p. 320을 참고 혹은 알고리즘 관련 도서를 참고 바람.)</p>
+
+<p>사용 예)</p>
+
+<p><code>scala
+msort((x: Int, y: Int) =&gt; x &lt; y)(List(5, 7, 1, 3)) // List(1, 3, 5, 7)
+</code></p>
+
+<p>섹션 9.3의 currying을 적용해서 정수형을 정렬하는 함수</p>
+
+<p><code>scala
+val intSort = msort((x: Int, y: Int) =&gt; x &lt; y) _
+</code></p>
+
+<p>정수형을 역순으로 정렬하는 함수</p>
+
+<p><code>scala
+val reverseIntSort = msort((x: Int, y: Int) =&gt; x &gt; y) _
+</code></p>
+
+<p>이상 위의 함수들을 이용한 예제</p>
+
+<p><code>scala
+val mixedInts = List(4, 1, 9, 0, 5, 8, 3, 6, 2, 7)
+intSort(mixedInts)
+reverseIntSort(mixedInts)
+</code></p>
+
+<h2>16.7 Higher-order methods on class List</h2>
+
+<p>고차함수란 다른 함수를 매개변수로 취하는 함수를 말하는데, 이런 고차 연산자를 이용한 List 클래스의 메소드들을 살펴보겠음.</p>
+
+<h3>Mapping over lists:  map, flatMap and foreach</h3>
+
+<p><code>xs map f</code> &ndash; <code>List[T]</code> 타입의 <code>xs</code> 리스트와 <code>T =&gt; U</code> 타입의 함수 <code>f</code>를 오퍼랜드로 취함. <code>xs</code>의 각 리스트 요소에 함수 <code>f</code>를 적용한 리스트를 반환함.</p>
+
+<p>``` scala
+List(1, 2, 3) map (_ + 1)                           // List(2, 3, 4)</p>
+
+<p>val words = List(&ldquo;the&rdquo;, &ldquo;quick&rdquo;, &ldquo;brown&rdquo;, &ldquo;fox&rdquo;)
+words map (<em>.length)                                // List(3, 5, 5, 3)
+words map (</em>.toList.reverse.mkString)               // List(eht, kciuq, nworb, xof)
+```</p>
+
+<p><code>flatMap</code> &ndash; <code>map</code>과 비슷. 오른쪽 오퍼랜드로 요소의 리스트를 반환하는 함수를 취함. 모든 함수를 적용한 결과를 단일 리스트로 취합함.</p>
+
+<p>``` scala
+words map (_.toList)
+// List(List(t, h, e), List(q, u, i, c, k), List(b, r, o, w, n), List(f, o, x))</p>
+
+<p>words flatMap (_.toList)
+// List(t, h, e, q, u, i, c, k, b, r, o, w, n, f, o, x)
+```</p>
+
+<p>1 &lt;= j &lt; i &lt; 5인 모든  짝(i, j)의 리스트를 구성하는 예제</p>
+
+<p>``` scala
+List.range(1, 5) flatMap (</p>
+
+<pre><code>i =&gt; List.range(1, i) map (j =&gt; (i, j))
+</code></pre>
+
+<p>)</p>
+
+<p>// List((2, 1), (3, 1), (3, 2), (4, 1), (4, 2), (4, 3))
+```</p>
+
+<p><code>for</code>문을 사용한 같은 예제</p>
+
+<p><code>scala
+for (i &lt;- List.range(1, 5); j &lt;- List.range(1, i)) yield (i, j)
+</code></p>
+
+<p><code>foreach</code>가 <code>map</code>과 <code>flatMap</code>과 비슷하나 다른 점은 결과의 리스트를 모으는 것이 아니라 Unit 타입의 결과만 리턴함.</p>
+
+<p><code>scala
+var sum = 0
+List(1, 2, 3, 4, 5) foreach (sum += _)  // 15
+</code></p>
+
+<h3>Filtering lists: filter, partition, find, takeWhile, dropWhile, and span</h3>
+
+<p><code>xs filter p</code> &ndash; <code>List[T]</code> 타입의 <code>xs</code> 리스트와 <code>T =&gt; Boolean</code> 타입의 함수 <code>p</code>를 오퍼랜드로 취하고 p(x)가 참인 <code>xs</code>의 모든 요소 <code>x</code>를 반환함.</p>
+
+<p>``` scala
+List(1, 2, 3, 4, 5) filter (_ % 2 == 0)     // List(2, 4)</p>
+
+<p>words filter (_.length == 3)                // List(the, fox)
+```</p>
+
+<p><code>partition</code> 메소드는 <code>filter</code>와 비슷하나 리스트의 쌍을 반환함. 하나는 참, 하나는 거짓인 요소의구성된 각각의 리스트를 반환</p>
+
+<p><code>scala
+List(1, 2, 3, 4, 5) partition (_ % 2 == 0)  // (List(2, 4), List(1, 3, 5))
+</code></p>
+
+<p><code>find</code> 역시 filter와 비슷하나 주어진 술어(predicate)를 만족하는 첫째 요소를 반환</p>
+
+<p><code>scala
+List(1, 2, 3, 4, 5) find ( _ % 2 == 0)  // Some(2)
+List(1, 2, 3, 4, 5) find (_ &lt;= 0)       // None
+</code></p>
+
+<p><code>xs takeWhile p</code> &ndash; p를 만족하는 모든 요소로 구성된 리스트 xs에서 가장 긴 prefix를 취함
+<code>xs dropWhile p</code> &ndash; p를 만족하는 모든 요소로 구성된 리스트 xs에서 가장 긴 prefix를 버림</p>
+
+<p><code>scala
+List(1, 2, 3, 4, -4, 5) takeWhile (_ &gt; 0)   // List(1, 2, 3)
+words dropWhile(_ startWith "t")            // List(quick, brown, fox)
+</code></p>
+
+<p><code>span</code> &ndash; <code>takeWhile</code>과 <code>dropWhile</code>을 하나로 합침, 그러나 리스트를 두 번 횡단하지 않음.</p>
+
+<p><code>scala
+xs span p equals (xs takeWhile p, xs dropWhile p)
+</code></p>
+
+<p>예제</p>
+
+<p><code>scala
+List(1, 2, 3, -4, 5) span (_ &gt; 0)   // (List(1, 2, 3), List(-4, 5))
+</code></p>
+
+<h3>Predicates over lists: forall and exists</h3>
+
+<p><code>xs forall p</code> &ndash; p를 만족하는 모든 요소를 반환
+<code>xs exists p</code> &ndash; p를 만족하는 요소가 있으면 <code>true</code>를 반환</p>
+
+<p>``` scala
+def hasZeroRow(m: List[List[Int[) = m exists (row => row forall (_ == 0))</p>
+
+<p>hasZeroRow(dia3)    // false
+```</p>
+
+<h3>Folding lists: /: and :\</h3>
+
+<p>아래의 더하기는</p>
+
+<pre><code>sum(List(a, b, c)) equals 0 + a + b + c
+</code></pre>
+
+<p>사실 다음과 같은 <code>fold</code> 연산의 인스턴스임.</p>
+
+<p><code>scala
+def sum(xs: List[Int]): Int = (0 /: xs)(_ + _)
+</code></p>
+
+<p>아래의 곱하기도</p>
+
+<pre><code>product(List(a, b, c)) equals 1 * a * b * c
+</code></pre>
+
+<p>다음과 같은 <code>fold</code> 연산의 인스턴스임.</p>
+
+<p><code>scala
+def product(xs: List[Int]): Int = (1 /: xs) (_ * _)
+</code></p>
+
+<p><code>:\</code> (<em>fold left</em> 라고 발음) 연산은 3개의 오퍼랜드를 취함. 시작값 <code>z</code>, 리스트 <code>xs</code>, 이항 연산 <code>op</code>. fold의 결과는 <code>z</code>가 부가된 리스트의 연속적인 요소 사이에 <code>op</code>가 적용됨.</p>
+
+<p><code>scala
+(z :/ List(a, b, c))(op) equals op(op(op(z, a), b, c)
+</code></p>
+
+<p>다른 예</p>
+
+<p><code>scala
+("" /: words) (_ +" "+ _)   //   java.lang.String =  the quick brown fox
+</code></p>
+
+<p>공백을 제거하려면</p>
+
+<p><code>scala
+(words.head /: words.tail)  (_ +" "+_)  // java.lang.String = the quick brown
+</code></p>
+
+<p><code>:\</code>(<em>fold right</em> 라고 발음) 연산은 오른쪽으로 기울어진 트리를 만듦.</p>
+
+<p><code>scala
+(List(a, b, c) :\ z)(op) equals op(a, op(b, op(c, z)))
+</code></p>
+
+<p>서로 관련된 동작의 경우, fold left와 fold right가 결과는 같지만 효율은 다를 수 있음. 예를 들어 flatten 연산은 fold left나 혹은 fold right로 다음과 같이 구현됨.</p>
+
+<p>``` scala
+def flattenLeft<a href="xss:%20List[List[T]]">T</a> = (List[T])() /: xss)(<em> ::: </em>)</p>
+
+<p>def flattenRight<a href="xss:%20List[List[T]">T</a> = (xss :\ List<a href="">T</a>)(<em> :: </em>)
+```</p>
+
+<p>리스트 연결 <code>xs ::: ys</code>가 첫째 인자 xs에 대해 시간이 비례하기 때문에, <code>flattenRight</code>가 보다 효율적임. <code>flattenLeft</code>의 문제점은 n은 리스트 <code>xss</code>의 길이일 때, <code>flattenLeft(xss)</code>가 <code>xss</code>의 첫째 요소 <code>xss.head</code>를 n-1번 복사하고 있다는 것임. (※. 관련된 Stackoverflow 질문 <a href="http://stackoverflow.com/questions/10475493/performance-consideration-between-and-operators-in-scala">Performance consideration between /: and :\ operators in Scala</a>)</p>
+
+<p>Scala 타입 추론의 제한으로 인해, 타입 주석을 생략할 경우 오류가 발생함.</p>
+
+<p><code>scala
+def flattenRight[T](xss: List[List[T]]) = (xss :\ List())(_ ::: _)
+</code></p>
+
+<p><code>/:</code>, <code>:\</code>가 직관적이지 않아 보일 경우, <code>List</code>에 정의된 <code>foldLeft</code>와 <code>foldRight</code>를 사용해도 무방함.</p>
+
+<h3>Example: List reversal using fold</h3>
+
+<p>선형적 효율을 보이는 reverse 메소드의 구현</p>
+
+<p><code>scala
+def reverseLeft[T](xs: List[T]) = (List[T]() /: xs){ (ys, y) =&gt; y :: ys }
+</code></p>
+
+<h3>Sorting lists: sortWith</h3>
+
+<p><code>xs sortWith before</code>&ndash; 두 개의 요소를 비교하는 <code>before</code> 함수에 의해 리스트 xs의 요소를 정렬</p>
+
+<p><code>scala
+List(1, -3, 4, 2, 6) sortWith (_ &lt; _)   // List(-3, 1, 2, 4, 6)
+words sortWith (_.length &gt; _.length)    // List(quick, brown, the, fox)
+</code></p>
+
+<h2>16.8 Methods of list object</h2>
+
+<h3>Creating lists from their elements: List.apply</h3>
+
+<p>리스트 <code>List(1, 2, 3)</code>은 <code>List.apply(1, 2, 3)</code>과 같음 &ndash; 요소 1, 2, 3 에 대해서 <code>List</code>의 <code>apply</code>를 호출</p>
+
+<p><code>scala
+List.apply(1, 2, 3)     // List(1, 2, 3)
+</code></p>
+
+<h3>Creating a range of numbers: List.range</h3>
+
+<p><code>List.range(from, until)</code> &ndash; 리스트의 from 에서 시작해서 until까지의 모든 수로 된 새 리스트를 작성. 마지막 until의 요소는 포함되지 않음. 세 번째 매개변수로 <code>step</code>이 있음</p>
+
+<p><code>scala
+List.range(1, 5)        // List(1, 2, 3, 4)
+List.range(1, 9, 2)     // List(1, 3, 5, 7)
+List.range(9, 1, -3)    // List(9, 6, 3)
+</code></p>
+
+<h3>Creating uniform lists: List.fill</h3>
+
+<p><code>fill</code> &ndash; 0 또는 그 이상의 같은 요소로 구성된 리스트를 생성. 매개변수는 2개 &ndash; 생성할 리스트의 길이와 반복될 요소</p>
+
+<p><code>scala
+List.fill(5)('a')           // List(a, a, a, a, a)
+List.fill(3)("hello")       // List(hello, hello, hello)
+</code></p>
+
+<p>2개 이상의 매개변수를 넘기면 다차원 리스트를 구성함</p>
+
+<p><code>scala
+List.fill(2, 3)('b')        // List(List(b, b, b), List(b, b, b))
+</code></p>
+
+<h3>Tabulating a function: List.tabulate</h3>
+
+<p><code>tabulate</code> &ndash; 요소들이 주어진 함수에 의해 계산되는 리스트를 생성. <code>List.fill</code>과 동일한 매개변수를 취함.</p>
+
+<p><code>scala
+val squares = List.tabulate(5)(n =&gt; n * n)  // List(0, 1, 4, 9, 16)
+val multiplication = List.tabulate(5, 5)(_ * _) // List(List(0, 0, 0, 0, 0), List(0, 1, 2, 3, 4), List(0, 2, 4, 6, 8), List(0, 3, 6, 9, 12), List(0, 4, 8, 12, 16))
+</code></p>
+
+<h3>Concatenating multiple lists: List.concat</h3>
+
+<p><code>concate</code> &ndash; 다수의 리스트 요소들을 합치는 메소드</p>
+
+<p><code>scala
+List.concat(List('a', 'b'), List('c'))      // List(a, b, c)
+List.concat(List(), List('b'), List('c'))   // List(b, c)
+List.concat(()                              // List()
+</code></p>
+
+<h2>16.9 Processing multiple list together</h2>
+
+<p>튜플의 &lsquo;zipped&rsquo; 메소드는 여러 리스트에 대해 수행해야할 몇 개의 같은 연산을 그냥 한 리스트로 일반화함.</p>
+
+<p><code>scala
+(List(10, 20), List(3, 4, 5)).zipped.map(_ * _)     // List(30, 80), 3번째 요소는 버려짐.
+</code></p>
+
+<p><code>exists</code>와 <code>forall</code>에 대해 비슷하게 <code>zipped</code>을 하면,</p>
+
+<p><code>scala
+(List("abc", "de"), List(3, 2)).zipped.forall(_.length == _)    // true
+(List("abc", "de"), List(3, 2)).zipped.exists(_.length != _)    // false
+</code></p>
+
+<h2>16.10 Understanding Scala&rsquo;s type inference algorithm</h2>
+
+<p><code>sortWith</code>과 <code>msort</code> 사이의 차이점은 비교 함수에서 용인될 수 있는 문법적 형식임. 비교해보자면,</p>
+
+<p><code>scala
+msort((x: Char, y: Char) =&gt; x &gt; y)(abcde)       // List(e, d, c, b, a)  
+abcde sortWith (_ &gt; _)                          // List(e, d, c, b, a)
+</code></p>
+
+<p>두 표현식은 동일하지만, 첫 번째는 명명된 매개변수(named parameter)와 명시적인 타입으로 구성된 비교 함수의 좀 더 긴 형식을 사용하는 반면, 두 번째는 구체적인 형식인 <code>(_ &gt; _)</code>를 사용. 물론, <code>sortWith</code>으로도 첫 번째처럼 긴 형식의 비교 함수를 사용할 수 있음.</p>
+
+<p>그러나 짦은 형식은 <code>msort</code>에서는 사용할 수 없음!</p>
+
+<p><code>scala
+msort(_ &gt; _)(abcde) // error: missing parameter type for expanded function ((x$1, x$2) =&gt; x$1.$greater(x$2))
+</code></p>
+
+<p>스칼라에서 타입 추론은 flow 기반임. 메소드 <code>m(args)</code>에서 추론자(inferencer)는 메소드 m이 타입을 알고 있는지를 확인함. 이 타입은 인자의 기대되는 타입을 추론하는데 사용됨.</p>
+
+<p>예를 들어, <code>abcde.sortWith(_ &gt; _)</code>에서 <code>abcde</code>는 <code>List[Char]</code> 타입. 따라서, <code>sortWith</code>은 <code>(Char, Char) =&gt; Boolean</code> 타입의 인자를 취하는 메소드임을 알 수 있음.</p>
+
+<p>함수 인자의 매개변수 타입을 알고 있기 때문에, 명시적으로 기술할 필요가 없음. 추론자(inferencer)는 <code>(_ &gt; _)</code>는 <code>((x: Char, y: Char) =&gt; x &gt; y)</code>로 확장되어야 함을 추정할 수 있음.</p>
+
+<p>두 번째 <code>msort(_ &gt; _)(abcde)</code>의 경우, <code>msort</code>의 타입은 커리(curry)됨. 다형적(polymorphic) 메소드 타입은 <code>T</code>가 아직 임의의 타입일 때 <code>List[T]</code>에서 <code>List[T]</code>까지 함수의 <code>(T, T) =&gt; Boolean</code> 타입을 인자로 취함.</p>
+
+<p><code>msort</code> 메소드는 그 인자가 적용되기 전에 매개변수 타입 (의 인스턴스)로 초기화되어야 함. <code>msort</code> 인스턴스의 정확한 타입을 알지 못하므로, 자신의 첫 번째 인자 타입을 추론할 수 없음.</p>
+
+<p>이 때, 타입 추론자는 전략을 바꾸어 메소드의 적당한 인스턴스 타입을 결정하기 위해 메소드 인자를 확인함. 주어진 짧은 함수 리터럴 <code>(_ &gt; _)</code>의 타입 확인은 <code>_</code>로 표시된 암묵적 함수 매개변수의 타입에 대한 정보가 없기 때문에 실패함.</p>
+
+<p>한 가지 해법은 <code>msort</code>에 명시적 매개변수 타입을 전달하는 것임.</p>
+
+<p><code>scala
+msort[Char](_ &gt; _)(abcde) // List(e, d, c, b, a)
+</code></p>
+
+<p><code>msort</code>의 정확한 인스턴스 타입을 이제 알고 있으므로, 인자의 타입을 추론할 수 있음.</p>
+
+<p>다른 해법은 <code>msort</code> 메소드를 자신의 매개변수가 스왑되도록 재작성하는 것임.</p>
+
+<p>``` scala
+def msortSwapped<a href="xs:%20List[T]">T</a>(less: (T, T) => Boolean): List[T] = {</p>
+
+<pre><code>// msort와 같은 구현, 그러나 인자들이 swap됨.
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이제 타입 추론은 성공할 것임.</p>
+
+<p><code>scala
+msortSwapped(abcde)(_ &gt; _) // List(e, d, c, b, a)
+</code></p>
+
+<p>추론자는 <code>msortSwapped</code>의 매개변수 타입을 결정하기 위해 첫 번째 매개변수 <code>abcde</code>의 알려진 타입을 사용함. <code>msortSwapped</code>의 정확한 타입을 알게 되면, 이어서 두 번째 매개변수인 <code>(_ &gt; _)</code>의 타입을 추론할 수 있음.</p>
+
+<p>추론 계획(inference scheme)은 다음의 라이브러리 설계 원리를 도출함.</p>
+
+<blockquote><p>비함수 인자와 함수 인자를 취하는 다형성을 지닌 메소드를 설계할 때, 함수 인자는  자신에 의해 커리된 리스트 매개변수의 마지막에 둬야함. (※. 타입 유추가 flow 기반이기 때문. 즉,  첫 번째 명시적인 타입을 지닌 인자인 비함수 인자에 의해 타입 유추를 결정하기 때문임.)</p>
+
+<p>When designing a polymorphic method that takes some non-function arguments and a function argument, place the function argument last in a curried parameter list by its own.</p></blockquote>
+
+<p>좀 더 복잡한 fold의 경우, 328 페이지의 <code>flattenRight</code> 메소드의 바디처럼 표현식에 명시적인 매개변수 타입이 왜 필요할까?</p>
+
+<p><code>scala
+(xss :\ List[T]()) (_ ::: _)
+</code></p>
+
+<p>fold-right의 타입은 두 가지 타입 변수를 가지므로 다형적임.</p>
+
+<p>``` scala</p>
+
+<pre><code>(xs :\ z)(op)
+</code></pre>
+
+<p>```</p>
+
+<p><code>xs</code>의 타입은 임의의 A 타입의 리스트로, <code>xs: List[A]</code>이고 시작값 <code>z</code>는 다른 타입 &lsquo;B'일 것이며, <code>op</code> 연산은 A 타입과 B 타입 두 개의 인자를 취해 결과로 B 타입을 반환해야 함. 예를 들면 <code>op: (A, B) =&gt; B</code>.</p>
+
+<p><code>z</code>의 타입은 리스트 <code>xs</code>의 타입과 무관하므로, 타입 추론시에 <code>z</code>에 대해 아무런 컨텍스트 정보가 없음.</p>
+
+<p>328 페이지의 잘못된 버전의 <code>flattenRight</code> 살펴보면,</p>
+
+<p>``` scala</p>
+
+<pre><code>(xss :\ List())(_ ::: _) // 컴파일 안됨
+</code></pre>
+
+<p>```</p>
+
+<p>시작값 <code>z</code>는 빈 리스트 <code>List()</code>이고 추가적인 타입 정보가 없으므로 자신의 타입은 <code>List[Nothing]</code>으로 추론됨. 따라서, 추론자는 fold되는 B 타입을 <code>List[Nothing]</code>이라고 추론함. 그러므로, fold의 <code>(_ ::: _)</code>는 아래의 타입으로 기대됨.</p>
+
+<p>``` scala</p>
+
+<pre><code>(List[T], List[Nothing]) =&gt; List[Nothing]
+</code></pre>
+
+<p>```</p>
+
+<p>가능한 타입이긴 하지만, 이 연산은 항상 빈 리스트를 두 번째 인자로 취하기 때문에 빈 리스트를 결과로 반환함. 즉, 타입 추론이 너무 이른 시점에 <code>List()</code>에 대해 결정되버림. <code>op</code>의 타입이 보였을 때까지 기다렸어야 함.</p>
+
+<p>커리(curry)된 메소드의 메소드의 타입을 결정하는데 첫 번째 인자에 대해서만 고려하는 규칙이 문제의 근원임. 규칙이 완화되더라도 추론자는 <code>op</code>에 대한 타입을 제시할 수 없음. 따라서, 프로그래머로부터 명시적인 타입 주석으로만 해결될 수 있는 이러지도 저러지도 못하는 시츄에이션임.</p>
+
+<h2>16.11 Conclusion</h2>
+
+<p>다음 장에서는 콜렉션에 대해 살펴보겠음.</p>
+
+<h2>The Mores</h2>
+
+<ul>
+<li><a href="http://www.javacodegeeks.com/2011/09/scala-tutorial-tuples-lists-methods-on.html">Scala Tutorial – Tuples, Lists, methods on Lists and Strings</a></li>
+<li><a href="http://stackoverflow.com/questions/10866639/scala-difference-between-a-seq-and-a-list">Scala: The Difference between a Seq and a List</a></li>
+<li><a href="http://stackoverflow.com/questions/10999024/scala-var-list-vs-val-mutablelist">Scala: var List vs val MutableList</a></li>
+<li><a href="http://www.scala-lang.org/api/current/index.html#scala.collection.mutable.MutableList">API: scala.collection.mutable.MutalbleList</a></li>
+<li><a href="http://stackoverflow.com/questions/10475493/performance-consideration-between-and-operators-in-scala">Performance consideration between /: and :\ operators in Scala</a></li>
+<li><a href="http://stackoverflow.com/questions/1446419/how-do-you-know-when-to-use-fold-left-and-when-to-use-fold-right">How do you know when to use fold-left and when to use fold-right?</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

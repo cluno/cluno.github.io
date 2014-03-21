@@ -1,0 +1,3509 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Scala | Patrick Yoon]]></title>
+  <link href="http://cluno.github.io/blog/categories/scala/atom.xml" rel="self"/>
+  <link href="http://cluno.github.io/"/>
+  <updated>2014-03-21T22:38:45+09:00</updated>
+  <id>http://cluno.github.io/</id>
+  <author>
+    <name><![CDATA[Patrick Yoon]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[확장성있는 컴포넌트 개발 - 객체지향 스타일 vs 함수형 스타일]]></title>
+    <link href="http://cluno.github.io/blog/2013/10/27/buidling-scalable-components/"/>
+    <updated>2013-10-27T22:38:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/10/27/buidling-scalable-components</id>
+    <content type="html"><![CDATA[<p><a href="http://www.amazon.com/Scala-Action-Nilanjan-Raychaudhuri/dp/1935182757">Scala in Action</a>의 8장의 내용을 확실히 이해하고자 되새김질 차원에서 하나하나 타이핑해가며 번역하였다. <!-- more --></p>
+
+<p>Scala in Action의 8장 제목은 &lsquo;Building scalable and extensible components'이다. 8장에서 소개되는 문법(추상 타입 멤버, 셀프 타입 멤버, 타입 투영, 팬텀 타입, 타입 클래스 등)에 대한 부분은 생략하고 실무사례로 예로 들고 있는 급여명세 시스템에 대한 부분만 간략히 번역해 보았다.</p>
+
+<h3>재사용</h3>
+
+<p>먼저, 재사용 가능한 컴포넌트를 Scala로 어떻게 작성하는지 간단히 살펴보기 위해 일반적인 주문시스템을 만들어보자.</p>
+
+<p>일반적인 주문시스템은 다음의 컴포넌트로 구성된다.</p>
+
+<ul>
+<li>주문(Order) &ndash; 고객이 주문한 내용을 기술.</li>
+<li>창고(Inventory) &ndash; 상품을 저장하고 있는 컴포넌트, 주문 전에 상품이 있는지 확인해야 함.</li>
+<li>배송(Shipping) &ndash; 고객 주문 처리 방법을 기술.</li>
+</ul>
+
+
+<p>실제는 이보다 더 복잡하지만, 더 큰 컨텍스트로 쉽게 확장할 수 있기 때문에 이 정도로 단순화시키자.</p>
+
+<p>추상 타입 멤버(abstract type memeber)로 주문시스템 컴포넌트를 아래와 같이 추상화할 수 있다.</p>
+
+<p>``` scala
+trait OderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>OrderSystem</code>은 3가지 추상 멤버를 선언하고 있다. 동시에 각 타입은 상한을 정하고 있다. 타입 <code>O</code>는 <code>Order</code> 타입의 하위 타입이다. 마찬가지로 <code>I</code>와 <code>S</code>는 <code>Inventory</code>와 <code>Shipping</code>의 하위 타입이다. 따라서, 각 컴포넌트에 대해 <code>Order</code>, <code>Inventory</code>, <code>Shipping</code>의 로직은 다음과 같이 정의할 수 있다.</p>
+
+<p>``` scala
+trait OrderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+
+trait Order { def placeOrder (i: I): Unit }
+trait Inventory { def itemExits(order: O): Boolean }
+trait Shipping { def scheduleShipping(order: O): Long }
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 컴포넌트를 한 트레이트(trait, 이하 트레이트)로 묶으면 모두가 한 장소에서 집약되고 캡슐화된다는 장점이 있다. 각 컴포넌트의 인터페이스는 갖추었지만, 주문을 하려면 몇 가지 단계를 구현해야한다.</p>
+
+<ul>
+<li>창고에 물품이 있는지를 확인.</li>
+<li>해당 창고에 대해 주문을 함.</li>
+<li>배송 일정을 잡음.</li>
+<li>창고에 물건이 없으면 주문을 하지 않고 창고에 제품을 보충하도록 알림.</li>
+</ul>
+
+
+<p><code>OderingSyste</code>에 정의된 <code>Ordering</code> 트레이트에 대해 이 단계들을 구현해보자.</p>
+
+<p>``` scala
+trait Odering { this: I with S =></p>
+
+<pre><code>def placeOrder(o: O): Option[Long] = {
+    if(itemExists(o)) {
+        o.placeOrder (this)
+        Some(scheduleShipping(o))
+    }
+    else None
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>placeOrder</code> 메소드는 위에서 언급된 모든 단계들을 셀프 타입 주석(self type annotation)의 은총으로 구현된다. <code>Ordering</code>은 이제 <code>itemExists</code> 메소드의 <code>Inventory</code>와 <code>sheduleShipping</code> 메소드의  <code>Shipping</code>에 의존하게 된다. <code>with</code> 키워드로 다중 셀프 타입 주석을 기술할 수 있음을 주목하자. 이상 다음은 모든 부분들을 합친 주문시스템 컴포넌트이다.</p>
+
+<p>``` scala
+trait OrderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+
+trait Ordering { this: I with S =&gt;
+    def placeOrder (o: O): Option[Long] = {
+        if(itemExists(o) {
+            o.placeOrder(this)
+            Some(scheduleShippng(o))
+        }
+        else None
+    }
+}
+</code></pre>
+
+<p>}
+<code>``
+</code>OrderingSystem<code>의 추상 타입 멤버들은 이 컴포넌트가 구체적인 구현에 의존하지 않는 서비스임을 나타낸다. 이는 여러가지 상황에서 재사용할 수 있다. 결합 기능으로</code>Inventory<code>와</code>Shipping<code>트레이트를 조립해서</code>Odering<code>트레이트를 만들 수 있고, 셀프 타입으로</code>Ordering<code>은 트레이트 결합으로 제공되는 서비스를 사용할 수 있다. 이 모든 추상은 Scala에서 확장성 있고 재사용성 있는 컴포넌트를 만들 수 있는 블딩블럭을 제공한다. 도서 주문시스템을 구현하고자 할 경우,</code>OderingSystem`을 아래와 같이 쉽게 재사용할 수 있다.</p>
+
+<p>``` scala
+object BookOrderingSystem extends OrderingSystem {</p>
+
+<pre><code>type O = BookOrder
+type I = AmazonBookStore
+type S = UPS
+
+class BookOrder extends Order {
+    def placeOrder(i: AmazonBookStore): Unit ...
+}
+
+trait AmazonBookStore extends Inventory {
+    def itemExists(o: BookOrder) = ...
+}
+
+trait UPS extends Shipping {
+    def scheduleShipping(order: BookOrder): Long = ...
+}
+
+object BookOrdering extends Ordering with AmazoneBookStore with UPS
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>BookOrderingSystem</code>은 구체적인 구현을 모두 제공하며 도서를 주문하는 <code>BookOrdering</code> 객체를 생성한다. 우리가 할 일은 임포트(import, 이하 임포트)해서 <code>BookOrderingSystem</code>을 사용하는 것이 전부다.</p>
+
+<p><code>scala
+import BookOrderingSystem._
+BookOrdering.placeOrder(new BookOrder)
+</code></p>
+
+<h3>Expression problem과 확장 가능성</h3>
+
+<p>소프트웨어 컴포넌트를 확장해서 현재 소프트웨어 시스템에 기존 소스 코드를 바꾸지 않고 연동하는 것은 소프트웨어 공학이 지닌 근본적인 도전이다. 많은 닝겐들이 <em>Expression problem</em> 을 사용해 객체 지향 상속이 소프트웨어 컴포넌트 확장의 면에서 실패하는 것을 보여주었다. Expression problem은 유형별로 데이터 타입을 정의하는 도전인데, 재컴파일 하지 않고 정적 타입 안정성을 유지하며 데이터 타입의 새 유형과 연산을 추가할 수 있어야 한다는 것이다. 보통 이런 도전은 프로그래밍 언어의 강점과 약점을 증명하는데 쓰인다. Scala에서는 이 문제를 어떻게 풀 수 있는지 살펴보자.</p>
+
+<p>목표는 데이터 타입과 기존 코드의 재컴파일 없이 그러나 정적 타입 안정성(static type safety)은 유지하며 새로운 데이터 타입과 새로운 연산을 정의하는 것이다.</p>
+
+<p>Expression problem은 다음의 요구조건을 모두 만족하며 구현되어야 한다.</p>
+
+<ul>
+<li>두 가지 차원에서 확장 가능성. 새 타입의 정의와 모든 타입에 대해 동작하는 연산의 추가.</li>
+<li>강력한 정작 타입 안정성. 타입 캐스팅과 리플렉션은 당연한 것임.</li>
+<li>기존 코드의 수정이 있어서는 안되며, 중복도 없어야 함.</li>
+<li>컴파일 작업은 분리되어야 함.</li>
+</ul>
+
+
+<p>&lsquo;직원 급여명세 시스템'의 실무 사례로 이 문제를 살펴보자.
+``` scala
+case class Employee(name: String, id: Long)</p>
+
+<p>trait Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+</code></pre>
+
+<p>}</p>
+
+<p>class USPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}</p>
+
+<p>class CanadaPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>Payroll</code> 트레이트는 직원 콜렉션을 받아 그들의 급여를 처리하는 <code>processEmployees</code> 메소드를 선언하고 있다. <code>USPayroll</code>과 <code>CanadaPayroll</code>은 개별 국가마다 급여를 처리하는 방법에 따라 <code>processEmployees</code> 메소드를 구현하고 있다.</p>
+
+<p>비지니스의 변화로 인해 일본 직원의 급여도 처리해야 된다고 하자. 간단하다. <code>Payroll</code> 트레이트를 상속하는 다른 클래스를 추가하기만 하면 된다.</p>
+
+<p>``` scala
+class JapanPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이는 expression problem이 말하는 확장의 한 종류이다. 타입 안정성이란 답을 얻었다. 이제 <code>JapanPayroll</code>을 한 확장으로 추가할 수 있고, 기존 시스템에 컴파일을 분리하여 삽입할 수 있다.</p>
+
+<p>새로운 연산을 추가하려 할 때는 무슨 일이 발생하는가? 이번에는 비지니스가 계약자(contractor)를 고용하기로 결정했고, 이들의 월 급여를 처리해야 한다. 새로운 <code>Payroll</code> 인터페이스는 다음과 같아야 할 것이다.</p>
+
+<p>``` scala
+case class Employee(name: String, id: Long)
+case class Contractor(name: String)</p>
+
+<p>trait Payroll extends super.Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+</code></pre>
+
+<p>}
+```</p>
+
+<p>문제는 전부를 재빌드해야 하기 때문에, expression problem의 제약으로 인해 되돌아가서 트레이트를 수정할 수 없다는 것이다. 수정하지 않고 어떻게 기존 시스템에 기능을 추가할 것인지는 실제적인 문제이다. expression problem 해법의 어려움을 이해하기 위해, 방문자(Visitor) 패턴을 사용해 이 문제를 풀어보자. 다음과 같이 직원 급여를 처리하는 방문자 하나를 만들자.</p>
+
+<p>``` scala
+case class USPayroll {</p>
+
+<pre><code>def accept(v: PayrollVisitor) = v.visit(this)
+</code></pre>
+
+<p>}</p>
+
+<p>case class CanadaPayroll {</p>
+
+<pre><code>def accept(v: PayrollVisitor) = v.visit(this)
+</code></pre>
+
+<p>}</p>
+
+<p>trait PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwale]
+def visit(payroll: CanadaPayroll): Either[String, Throwale]
+</code></pre>
+
+<p>}</p>
+
+<p>class EmployeePayrollVisitor extends PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwale] = ...
+def visit(payroll: CanadaPayroll): Either[String, Throwale] = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>USPayroll</code>과 <code>CanadaPayroll</code> 타입 모두 급여명세(payroll) 방문자를 억셉트한다. 직원들의 급여를 처리하기 위해 <code>EmployeePayrollVisitor</code> 인스턴스를 사용할 것이다. 계약자의 매달 급여를 처리하기 위해, <code>ContractorPayrollVisitor</code>라 불리는 새 클래스를 다음과 같이 쉽게 만들 수 있다.</p>
+
+<p>``` scala
+class ContractorPayrollVisitor extends PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwable] = ...
+def visit(payroll: CanadaPayroll): Either[String, Throwable] = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>방문자 패턴을 사용하면, 새 연산을 추가하는 것은 쉽지만, 타입은 어떠한가? <code>JapanPayroll</code>이라 불리는 새 타입을 추가하려면, 되돌아가서 모든 방문자가 <code>JapanPayroll</code>를 허용하도록 수정해야 한다. 첫 번째 해법은 새 타입을 쉽게 추가할 수 있고, 두 번째 해법은 새 연산을 쉽게 추가할 수 있다. 그러나 우리는 두 가지 측면을 모두 처리할 수 있는 해법을 원한다.</p>
+
+<h3>객체지향 스타일</h3>
+
+<p>Scala에서 추상 타입 멤버와 트레이트 결합을 사용해 이 문제를 어떻게 풀어가는지 살펴보자. 동일한 급여명세 시스템을 사용해서, 어떻게 새로운 타입을 추가하는 동시에 타입 안정성을 깨지않고 급여명세 시스템에 새로운 연산을 쉽게 추가할 수 있는지 살펴보자.</p>
+
+<p>아래와 같이 기본 급여명세 시스템을 추상 멤버 타입을 지닌 트레이트로 정의해보자.</p>
+
+<p>``` scala
+trait PayrollSystem {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+type P &lt;: Payroll
+trait Payroll {
+    def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+    def processPayroll(p: P): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 것을 한 트레이트에 두게 되면, 이를 모듈로 다룰 수 있다. <code>P</code> 타입은 <code>Payroll</code> 트레이트의 어떤 하위 타입을 의미하는데, 직원들의 급여를 처리하기 위해 추상 메소드로 선언되어 있다. <code>processPayroll</code> 메소드는 주어진 <code>Payroll</code> 타입에 대해 급여명세(payroll)을 처리하기 위해 구현되어야 할 필요가 있다. 아래는 트레이트가 미국과 캐나다 급여명세에 대해 어떻게 확장될 수 있는지 보여준다.</p>
+
+<p>``` scala
+trait USPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class USPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("US payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Canada payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>급여명세 처리의 상세는 생략하였다. 미국 직원들의 급여명세를 처리하기 위해, <code>processPayroll</code> 메소드를 구현함으로써 <code>USPayrollSystem</code>을 구현할 수 있다.</p>
+
+<p>``` scala
+object USPayrollInstance extends USPayrollSystem {</p>
+
+<pre><code>type P = USPayroll
+def processPayroll(p: USPayroll) = {
+    val employees: Vector[Employee] = ...
+    val result = p.processEmployees(employees)
+    ...
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이런 설정으로 일본에 대해서 새로운 <code>Payroll</code> 타입을 추가할 수 있다. <code>PayrollSystem</code>을 확장한 트레이트를 만들면 된다.</p>
+
+<p>``` scala
+trait JapanPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = ...
+}
+</code></pre>
+
+<p>}
+<code>``
+이제 전부를 재컴파일하지 않고</code>Payroll`에 새로운 메소드를 추가하자.</p>
+
+<p>``` scala
+trait ContractorPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>type P &lt;: Payroll
+case class Contractor(name: String)
+
+trait Payroll extends super.Payroll {
+    def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>ContractorPayrollSystem</code> 내에 정의된 <code>Payroll</code> 트레이트는 오버라이딩되지 않고 <code>PayrollSystem</code>으로부터 <code>Payroll</code> 타입의 이전 정의를 가리운다. (※. 이를 쉐도잉(shadowing)이라고 하는 듯..) 이전 <code>ContractPayrollSystem</code> 컨텍스트 안에서 이전 정의는 <code>super</code> 키워드를 사용해 접근할 수 있다. 쉐도잉은 코드에서 예기치 않은 오류를 가져다 줄지도 모르나 이 상황에서는 오버라이딩하지 않고 낡은 <code>Payroll</code> 정의를 확장한다.</p>
+
+<p>주목할만한 또 한가지는 추상 멤버 타입 <code>P</code>를 재정의하고 있다는 것이다. <code>P</code>는 <code>processEmployees</code> 메소드와 <code>processContractors</code> 메소드 모두를 이해하는 <code>Payroll</code>의 하위 타입이 될 필요가 있다. 계약자(contractor)를 미국과 캐나다 모두에 대해 처리하기 위해, <code>ContractPayrollSystem</code> 트레이트를 확장하자.</p>
+
+<p>``` scala
+trait USContractorPayrollSystem extends USPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class USPayroll extends super.USPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("US contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaContractorPayrollSystem extends CanadaPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends super.CanadaPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Canada contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>USPayroll</code>과 <code>CanadaPayroll</code>의 이전 정의를 쉐도잉하고 있다. 또한 <code>processContractors</code> 메소드를 구현하기 위해 <code>Payroll</code> 트레이트의 새로운 정의를 결합하고 있다. 타입 안정성 요구사항을 기억하자. <code>Payroll</code> 트레이트를 결합하지 않으면, <code>USContractorPayrollSystem</code>나 <code>CanadaContractorPayrollSystem</code>의 구체적인 구현을 만들 때 오류를 얻게 된다. 마찬가지로 <code>processContractors</code> 연산를 <code>JapanPayrollSystem</code>에 추가할 수 있다.</p>
+
+<p>``` scala
+trait JapanContractorPayrollSystem extends JapanPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends super.JapanPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Japan contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>현 시점에서 expression problem을 성공적으로 풀어보았다. 다음은 전체 코드이다.</p>
+
+<p>``` scala
+package chap08.payroll</p>
+
+<p>trait PayrollSystem {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+type P &lt;: Payroll
+trait Payroll {
+    def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+}
+def processPayroll(p: P): Either[String, Throwable]
+</code></pre>
+
+<p>}</p>
+
+<p>trait USPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class USPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("US payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Canada payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait JapanPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Japan payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait ContractorPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>type P &lt;: Payroll
+case class Contractor(name: String)
+trait Payroll extends super.Payroll {
+    def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait USContractorPayrollSystem extends USPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class USPayroll extends super.USPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("US contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaContractorPayrollSystem extends CanadaPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends super.CanadaPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Canada contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait JapanContractorPayrollSystem extends JapanPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends super.JapanPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Japan contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Scala 일급 모듈(first-class module) 지원을 사용하면, 모든 트레이트와 클래스를 한 객체로 포장하고 전부를 재컴파일하지 않으면서 또 동시에 타입 안정성을 유지하며 기존 소프트웨어 컴포넌트를 확장할 수 있다. 구버전과 새버전의 <code>Payroll</code> 모두 이용할 수 있다는 점, 구성하는 트레이트에 의해 동작들이 조정되는 점을 주목하라. 직원과 계약자들 모두를 처리하기 위해 새 <code>Payroll</code>을 사용하려면, <code>ContractorPayrollSystem</code> 트레이트 중 하나를 결합해야 한다. 다음의 예제는 <code>USContractorPayrollSystem</code> 인스턴스를 어떻게 만드는지를 보여준다.</p>
+
+<p>``` scala
+object RunNewPayroll {</p>
+
+<pre><code>object USNewPayrollInstance extends USContractorPayrollSystem {
+    type P = USPayroll
+    def processPayroll(p: USPayroll) = {
+        p.processEmployees(Vector(Employee("a", 1)))
+        p.processContractors(Vector(Contractor("b")))
+        Left("payroll processed successfully")
+    }
+}
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val usPayroll = new USPayroll
+    USNewPayrollInstance.processPayroll(usPayroll)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>processPayroll</code> 메소드는 <code>Payroll</code> 트레이트의 <code>processEmployees</code>와 <code>processContractors</code> 둘 다를 호출하지만, 대신에 미국 직원의 급여를 어떻게 처리해야 할지 아는 기존 급여명세 시스템을 쉽게 사용할 수 있다. 왜냐하면 <code>USPayroll</code> 트레이트를 여전히 확신할 수 있기 때문이다. 남은 것은 추가적인 <code>processContractors</code> 부분을 구현하는 것이다.</p>
+
+<p>이상, 우리는 객체 지향 추상 가능성(Object oriented abstractions available)을 사용해 풀어보았다.</p>
+
+<h3>함수형 스타일</h3>
+
+<p>이제 함수형 프로그래밍 차원에서 접근해보자.</p>
+
+<p>급여명세(payroll) 프로세스는 두 가지 추상화에 의해 주도된다. 하나는 급여명세를 처리하는 국가(country)고 하나는 피지불인(payee)이다.<code>USPayroll</code> 클래스는 다음과 같을 것이다.</p>
+
+<p>``` scala
+case class USPayroll<a href="payees:%20Seq[A]">A</a> {</p>
+
+<pre><code>def processPayroll = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>타입 <code>A</code>는 피지불인의 타입을 나타낸다. 이는 직원일 수 있고, 계약자일 수 있다. 비슷하게 캐나다 급여명세 클래스는 다음과 같을 것이다.</p>
+
+<p>``` scala
+case class CanadaPayroll<a href="payees:%20Seq[A]">A</a> {</p>
+
+<pre><code>def processPayroll = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>급여명세 프로세서 패밀리에 대한 유형 클래스를 나타내기 위해, 국가와 피지불인의 유형을 다음과 같이 매개변수화하여 다음의 트레이트를 정의할 수 있다.</p>
+
+<p>``` scala
+import scala.language.higherKinds
+trait PayrollProcessor[C[_], A] {</p>
+
+<pre><code>def processPayroll(payees: Seq[A]): Either[String, Throwable]
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>C</code>는 급여명세 유형을 나타내는 고차 존재(higher-kinded) 타입이다. 고차 존재 타입인 이유는 <code>USPayroll</code>과 <code>CanadaPayroll</code> 둘 다 타입 매개변수를 취하기 때문이다. <code>A</code>는 피지불인 유형을 나타내는 타입이다. 팬텀 타입(phamtom type)처럼 매개변수화된 타입을 제외하고는 <code>C</code>를 사용하지 않는다는 것을 주목하라. 타입 클래스의 두 번째 빌딩블럭인 <code>PayrollProcessor</code> 트레이트의 임플리시트(implicit, 이하 임플리시트) 정의는 다음과 같다.</p>
+
+<p>``` scala
+case class Employee(name: String, id: Long)
+implicit object USPayrollProcessor extends PayrollProcessor[USPayroll, Employee] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Employee]) = Left("us employees are processed")
+</code></pre>
+
+<p>}</p>
+
+<p>implicit object CanadaPayrollProcessor extends PayrollProcessor[CanadaPayroll, Employee] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Employee]) = Left("canada employees are processed")
+</code></pre>
+
+<p>}
+```</p>
+
+<p>국가에 따라 적절한 <code>PayrollProcessor</code>의 정의를 식별하기 위해 <code>PayrollProcessor</code>의 첫번째 타입 매개변수를 어떻게 사용하는지 살펴보자. 임플리시트 정의를 가져다 쓸려면, <code>USPayroll</code> 과 <code>CanadaPayroll</code> 타입에 모두에 대해 임플리시트 클래스 매개변수를  다음과 같이 정의해야 한다.</p>
+
+<p>``` scala
+case class USPayroll<a href="payees:%20Seq[A]">A</a>(implicit processor: PayrollProcessor[USPayroll, A]) {</p>
+
+<pre><code>def processPayroll = processor.processPayroll(payees)
+</code></pre>
+
+<p>}
+case class CanadaPayroll<a href="payees:%20Seq[A]">A</a>(implicit processor: PayrollProcessor[CanadaPayroll, A]) {</p>
+
+<pre><code>def processPayroll = processor.processPayroll(payees)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이제 <code>USPayroll</code>과 <code>CanadaPayroll</code> 인스턴스를 만들면, Scala 컴파일러가 임플리시트 매개변수에 대한 값을 공급한다. 지금까지의 소스는 다음과 같다.</p>
+
+<p>``` scala
+package chap08.payroll.typeclass
+import scala.langage.higherkinds</p>
+
+<p>object PayrollSystemWithTypeclass {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+
+trait PayrollProcessor[C[_], A] {
+    def processPayroll(payees: Seq[A]): Either[String, Throwable]
+}
+
+case class USPayroll[A](payees: Seq[A])(implicit processor: PayrollProcessor[USPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+
+case class CanadaPayroll[A](payees: Seq[A])(implicit processor: PayrollProcessor[CanadaPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+</code></pre>
+
+<p>}</p>
+
+<p>object PayrollProcessors {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+
+implicit object USPayrollProcessor extends PayrollProcessor[USPayroll, Employee] {
+    def processPayroll(payees: Seq[Employee]) = Left("us employees are processed")
+}
+
+implicit object CanadaPayrollProcessor extends PayrollProcessor[CanadaPayroll, Employee] {
+    payees: Seq[Employee]) = Left("canada employees are processed")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>object RunPayroll {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+import PayrollProcessors._
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val r = USPayroll(Vector(Employee("a", a))).processPayroll
+    println(r)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 임플리시트 정의들은 함께 그룹화되어, <code>RunPayroll</code> 객체 안으로, 임포트될 수 있게 거들고 있다. 직원 콜렉션을 제공하는 <code>USPayroll</code>를 인스턴스화할 때 임플리시트 프로세서가 공급됨을 주목하라. 이 경우에는 <code>USPayrollProcessor</code>가 이에 해당한다.</p>
+
+<p>이제 타입 안정성(type satefy)도 지녔는지 검증해보자. <code>Contractor</code>라 불리는 새 타입을 만들자.</p>
+
+<p><code>scala
+case class Contractor(name: String)
+</code></p>
+
+<p>피지불인 유형에 대한 제약사항이 없기 때문에, 쉽게 계약자 콜렉션을 만들어 <code>USPayroll</code>에 전달할 수 있다.</p>
+
+<p><code>scala
+USPayroll(Vector(Contractor("a"))).processPayroll
+</code></p>
+
+<p>그러나 위 라인을 컴파일하는 순간, 컴파일 에러가 발생한다. 왜냐하면 아직 <code>USPayroll</code> 과 <code>Contractor</code>에 대한 암묵적인 정의가 없기 때문이다.</p>
+
+<p>현재 구성에서 새 타입을 추가하는 것은 매우 쉽다. 새 클래스를 추가해서 급여명세 프로세서에 임플리시트를 정의하면 된다.</p>
+
+<p>``` scala
+object PayrollSystemWithTypeclassExtension {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+case class JapanPayroll[A](payees: Vector[A])(implicit processor: PayrollProcessor[JapanPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+
+case class Contractor(name: String)
+</code></pre>
+
+<p>}</p>
+
+<p>object PayrollProcessorsExtension {</p>
+
+<pre><code>import PayrollSystemWithTypeclassExtension._
+import PayrollSystemWithTypeclass._
+
+implicit object JapanPayrollProcessor extends PayrollProcessor[JapanPayroll, Employee] {
+    def processPayroll(payees: Seq[Employee]) = Left("japan employees are processed")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>계약자 B에 대한 급여를 지불하는 새 연산도 매우 간단하다. 아래와 같이 계약자에 대한 임플리시트를 정의하면 된다.</p>
+
+<p>``` scala
+implicit object USContractorPayrollProcessor extends PayrollProcessor[USPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("us contractors are processed")
+</code></pre>
+
+<p>}
+implicit object CanadaContractorPayrollProcessor extends PayrollProcessor[CanadaPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("canada contractors are processed")
+</code></pre>
+
+<p>}
+implicit object JapanContractorPayrollProcessor extends PayrollProcessor[JapanPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("japan contractors are processed")
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위의 임플리시트 정의들을 <code>PayrollProcessorsExtension</code> 객체 안에 추가하면, 모두를 함께 그룹지을 수 있다. 다음의 코드 조각은 직원과 계약자 모두의 급여를 지불하기 위한 코드를 어떻게 사용하지는 보여주고 있다.</p>
+
+<p>``` scala
+object RunNewPayroll {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+import PayrollProcessors._
+import PayrollSystemWithTypeclassExtension._
+import PayrollProcessorsExtension._
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val r1 = JapanPayroll(Vector(Employee("a", 1))).processPayroll
+    val r2 = JapanPayroll(Vector(Contractor("a"))).processPayroll
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>보다시피 필요한 클래스와 임플리시트 정의를 모두 임포트해서 일본에 대해 급여를 처리하고 있다. 이번에는 함수형 프로그래밍 기술을 사용하여 Expression problem을 거듭 성공적으로 풀었다. 자바 프로그래머들은 타입 클래스에 익숙해지는데에 다소 시간이 걸릴지도 모르지만, 한번 익숙해지게 되면 변경에 재빠르게 반응하는 소급 모델(retroactive model)의 파워를 갖추게 될 것이다.</p>
+
+<h3>나가며</h3>
+
+<p>Scala in Action의 8장에서는 Scala의 재사용성과 확장성을 보여주기 위해 Expression problem을 실무 사례와 비슷한 급여명세 시스템에 적용하며 객체지향 프로그래밍(OOP)과 함수형 프로그래밍(FP) 스타일의 해법을 제시하고 있다. OOP에서는 추상 멤버 타입과 트레이트 결합을, FP에서는 팬텀 타입(Phantom Type)과 임플리시트(implicit)를 사용하고 있다. 개인적으로는 아무래도 OOP 스타일이 더 익숙하지만, 임플리시트로 팬텀 타입(Phantom Type)에서 사용하는 타입을 준비하고 타입 매개변수에서 필요한 특정 타입을 지정하면 나머지는 컴파일러가 알아서 처리하는 FP 스타일의 간결함과 유연함이 좀 더 좋아보인다.</p>
+
+<h3>더 읽을거리</h3>
+
+<ul>
+<li><a href="http://www.slideshare.net/maedaunderscore/phatom-type-14612078">Phantom Type in Scala (Japanese, 2013)</a></li>
+<li><a href="http://docs.scala-lang.org/overviews/core/architecture-of-scala-collections.html">The Architecture of Scala Collections</a></li>
+<li><a href="http://stackoverflow.com/questions/7860163/what-are-some-compelling-use-cases-for-dependent-method-types">What are some compelling use cases for dependent method types?</a></li>
+<li><a href="http://ropas.snu.ac.kr/~bruno/papers/TypeClasses.pdf">Type Classes as Objects and Implicits (2010)</a></li>
+<li><a href="http://808fabrik.com/scala/functor-monad-in-scala-handout.pdf">From Functor to Monad (2013.02)</a></li>
+<li><a href="http://tmorris.net/posts/functors-and-things-using-scala/index.html">Functors and things using Scala (2013.03)</a></li>
+<li><a href="http://apocalisp.wordpress.com/2010/06/08/type-level-programming-in-scala/">Type-Level Programming (2010.06)</a></li>
+<li><a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.117.695">On understanding types, data abstraction, and polymorphism (1985)</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 18장]]></title>
+    <link href="http://cluno.github.io/blog/2013/06/13/programming-in-scala-18-jang/"/>
+    <updated>2013-06-13T17:37:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/06/13/programming-in-scala-18-jang</id>
+    <content type="html"><![CDATA[<p>여러가지로 바빠서 이제야 번역을 마치게 되었네요. 상태 기반 객체와 그에 대한 예제를 디지털 회로 시뮬레이션을 소개하는데, 잘 와닿지는 않습니다. 실무에서 디지털 회로를 구현할 일이 없으니깐요-_&ndash;;; 전체적으로 매끄럽진 않지만 대충 번역하고 19장으로 넘어갑니다.</p>
+
+<!-- more -->
+
+
+<h1>18 Stateful Objects</h1>
+
+<p>이 장에서는 상태 기반 객체가 무엇인지 그리고 Scala에서 이를 표현하기 위한 어떤 문법을 제공하는지를 설명한다. 이 장의 두 번째 부분에서는 상태 기반 객체뿐만 아니라 디지털 회로를 정의하며 내부 DSL(domain specific language)을 만들게 되는 이산 사건 시뮬레이션 소개한다.</p>
+
+<h1>18.1 What makes an object stateful?</h1>
+
+<p>객체의 구현을 살펴보지 않아도 순수 함수형 객체와 상태 기반 객체의 근본적인 차이점을 볼 수 있다. 순수 함수형 객체의 메소드를 호출하거나 필드를 역참조할 때는 항상 같은 결과를 얻게 된다. 예를 들면, 캐릭터형 리스트에 대해</p>
+
+<p><code>scala
+val cs = List('a', 'b', 'c')
+</code></p>
+
+<p><code>cs.head</code>를 적용하면 항상 &lsquo;a'를 반환한다.</p>
+
+<p>반면에 상태 기반 객체의 경우 메소드 호출이나 필드의 억세스 결과는 그 객체에 대해 무슨 동작이 이전에 실행되었는지에 의존한다.</p>
+
+<p>상태 기반 객체의 좋은 예는 은행 계좌이다.</p>
+
+<p>``` scala
+class BankAccount {</p>
+
+<pre><code>private var bal: Int = 0
+
+def balance: Int = bal
+
+def deposit(amount: Int) {
+    require(amount &gt; 0)
+    bal += amount
+}
+
+def withdraw(amount: Int): Boolean =
+    if(amount &gt; bal) false
+    else {
+        bal -= amount
+        true
+    }
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>BankAccount</code> 클래스는 private 변수 <code>bal</code>과 세 개의 public 메소드를 정의하고 있다. <code>balance</code>는 현재 잔고를 반환하고, deposit은 주어진 <code>amount</code>를 <code>bal</code> 에 더하고, <code>withdraw</code>는 남은 잔고가 음수가 아닌지 확인하면서 주어진 &lsquo;amount'를 'bal'에서 뺀다. <code>withdraw</code>의 반환값은 요청 자금이 성공적으로 인출되었는지 아닌지를 나타내는 <code>Boolean</code>이다.</p>
+
+<p><code>BankAccount</code>의 내부 동작에 대해 아무 것도 몰라도 <code>BankAccount</code>가 상태 기반 객체인 것은 알 수 있다.</p>
+
+<p><code>scala
+val account = new BankAccount
+account deposit 100
+account withdraw 80 // true
+accout withdraw 80 // false
+</code></p>
+
+<p>위 두 개의 인출 인터랙션이 다른 결과를 반환하고 있다는 것을 주목하자. 첫 번째 인출 동작은 <code>true</code>를 반환하지만, 두 번째 인출 동작은 <code>false</code>를 반환한다. 따라서 분명하게 은행 계정은 같은 동작이 다른 시간에 다른 결과를 반환할 수 있기 때문에 가변적인 상태를 지니고 있다.</p>
+
+<p> <code>BankAccount</code>의 상태성(statefulness)은 <code>var</code> 정의를 포함하고 있기 때문에 보나마나 분명하다고 생각할 수 있다. 보통 상태와 <code>var</code>는 관련되어 있지만, 일이란게 항상 그리 명확한 것은 아니다. 예를 들면, 클래스는 <code>var</code>를 정의하거나 상속하지 않더라도 상태가 있을 수 있는데, 가변 상태를 지닌 다른 객체의 메소드 호출을 진행하기 때문이다. <code>var</code>를 포함하는 클래스이면서 여전히 순수 함수형(purely funtional)인 역의 경우도 마찬가지로 가능하다. 한 예로는 최적화 목적을 위해 값비싼 연산의 결과를 캐시하는 클래스가 될 것이다.
+ 값비싼  <code>computeKey</code>를 지닌 다음의 최적화되지 않은 <code>Keyed</code> 클래스를 가정해보자.</p>
+
+<p>``` scala
+class Keyed {</p>
+
+<pre><code>def computeKey: Int = … // this will take some time
+...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>computeKey</code>가  어떤 <code>var</code> 변수도 읽거나 쓰지 않는다고 주어지면, 캐시를 추가함으로써 좀 더 효율적인 <code>Keyed</code>를 만들 수 있다.</p>
+
+<p>``` scala
+class MemoKeyed extends Keyed {</p>
+
+<pre><code>private var keyCache: Option[Int] = None
+override def computeKey: Int = {
+    if(!keyCache.isDefined) keyCache = Some(super.computeKey)
+    keyCache.get
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>MemoKeyed</code>를 사용하면 (캐시로 인해) 속도를 얻는 것 외에도  <code>Keyed</code> 클래스와 <code>MemoKeyed</code> 클래스 동작이 정확하게 동일하다. 결과적으로 <code>Keyed</code> 클래스가 순수 함수형이면, 변수를 재할당하는 <code>MemoKeyed</code>도 같은 순수 함수형이다.</p>
+
+<h1>18.2 Reassignable variables and properties</h1>
+
+<p>재할당 가능한 변수에 대해 두 가지 기본적인 연산을 수행할 수 있다. 그 값을 획득하거나 혹은 새로운 값을 설정하는 것이다. Scala에서 모든 <code>var</code>는 자신의 getter와 setter 메소드를 암묵적으로 정의하는 어떤 객체의 비private 멤버이다. (비 private 멤버, public이거나 protected 라는 뜻인 듯..)</p>
+
+<p>그러나 이러한 getter와 setter는 Java 컨벤션과 다른 이름을 지닌다. <code>var x</code>의 getter는 그냥 &ldquo;x"의 이름을 가지는데, setter는 "x_="의 이름을 가진다.</p>
+
+<p>예를 들면, 클래스에 나타나는 <code>var</code> 정의는</p>
+
+<p><code>scala
+var hour = 12
+</code></p>
+
+<p>&ldquo;hour&rdquo; getter를 생성하고, 이외에도 재할당 가능한 변수인 &ldquo;hour_=&rdquo; setter를 생성한다. 이 필드는 항상 <code>private[this]</code>로 표기되는데, 이 변수를 소유하는 객체에서만 접근할 수 있다는 것을 의미한다. 반면에 getter와 setter는 원본 <code>var</code>와 같은 가시성을  지닌다. <code>var</code> 정의가 <code>public</code>이면  getter와 setter도 그러하고, <code>protected</code>이면 이들도 <code>protected</code> 이며 나머지 경우도 이와 같다.</p>
+
+<p>예를 들어, 다음의 <code>Time</code> 클래스를 고려해보자, 이 클래스는 <code>hour</code>와 <code>minute</code>를 지닌 두 개의 public <code>var</code>가 정의되어 있다.</p>
+
+<p>``` scala
+class Time {</p>
+
+<pre><code>var hour = 12
+var minute = 0
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이 클래스의 구현은 아래에 기술된 클래스 정의와 정확하게 동일하다.</p>
+
+<p>``` scala
+class Time {</p>
+
+<pre><code>private[this] var h = 12
+private[this] var m = 0
+
+def hour: Int = h
+def hour_=(x: Int){ h = x }
+
+def minute: Int = m
+def minute_=(x: Int){ m = x }
+</code></pre>
+
+<p>}
+```</p>
+
+<p>지역 필드 <code>h</code>와 <code>m</code>의 이름은 이미 사용 중인 어떤 이름과도 충돌하지 않기 위해 임의로 선정된다.</p>
+
+<p><code>var</code>의 이러한 gette와 setter 확장에 대한 흥미로운 점은 <code>var</code>를 정의할 것인지, getter와 setter를 직접 정의할 것인지를 선택할 수 있다는 것이다. 예를 들면, 다음의 <code>Time</code> 클래스는 잘못된 값으로 할당하는 <code>hour</code>와 <code>minute</code>을 잡아내는 요구사항을 지니고 있다.</p>
+
+<p>``` scala
+class Time {</p>
+
+<pre><code>private[this] var h = 12
+private[this] var m = 0
+
+def hour: Int = h
+def hour_=(x: Int){ 
+    require(0 &lt;= x &amp;&amp; x &lt; 24)
+    h = x 
+}
+
+def minute: Int = m
+def minute_=(x: Int){ 
+    require(0 &lt;= x &amp;&amp; x &lt; 60)
+    m = x
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>변수를 setter와 getter의 쌍으로 해석하는 Scala 컨벤션은 C#의 프로퍼티와 같은 능력을 제공하는 효과가 있다. 프로퍼티는 변수의 getter와 setter에 대한 모든 억세스를 로깅하는데 사용할 수 있다. 또는 변수를 이벤트와 연동할 수 있다. 예를 들면, 변수가 수정될 때마다 어떤 구독 메소드에 통지할 수 있다. (이 예제는 35장에서 볼 수 있다.)</p>
+
+<p>관련된 필드가 없는 getter와 setter를 정의하는 것도 가능하다. 다음의 <code>Thermometer</code> 클래스는 읽고 갱신될 수 있는 온도 변수를 은닉화한다.</p>
+
+<p>``` scala
+class Thermometer {</p>
+
+<pre><code>var celsius: Float = _
+def fahrenheit = celsius * 9 / 5 + 32
+def fahrenheit_= (f: Float) {
+    celsius = (f - 32) * 5 / 9
+}
+
+override def toString = fahrenheit  + "F/" + celsius + "C"
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>celsius</code> 변수는 변수의 &ldquo;값 초기화"인 <code>_</code>로 기술되어 기본값으로 설정된다. 좀 더 정확히는 필드 &rdquo;=_&ldquo; 초기자(initializer)는 그 필드에 제로값을 할당한다. 제로값은 필드의 타입에 좌우된다. number 타입은 0이고, boolean 타입은 false이고 참조 타입은 null이다.</p>
+
+<p>Scala에서는 &ldquo;=_&rdquo; 초기자를 간단히 제거할 수 없다는 것을 주의해야 한다. 만약,</p>
+
+<p><code>scala
+var celsius: Float
+</code></p>
+
+<p>라고 작성하면, 이는 초기화되지 않은 추상 변수(abstract value)를 선언하게 된다.</p>
+
+<p><code>celsius</code> 변수 정의 다음에 &ldquo;fahrenheit&rdquo; getter와 &ldquo;fahrenheit_=&rdquo; setter가 정의되어 있는데, 같은 온도를 억세스하지만 화씨로 계산한다. 화씨의 현재 온도값을 저장하기 위한 별도의 필드가 없다. 대신에 화씨값의 setter와 getter 메소드는 자동으로 섭씨 온도로 바꾼다.</p>
+
+<p><code>scala
+scala&gt; val t = new Thermometer  
+t: Thermometer = 32.0F/0.0C
+scala&gt; t.celsius = 100          
+scala&gt; t                
+res3: Thermometer = 212.0F/100.0C
+scala&gt; t .fahrenheit = -40
+scala&gt; t
+res4: Thermometer = -40.0F/-40.0C
+</code></p>
+
+<h1>18.3 Case study: Discrete event simulation</h1>
+
+<p>이 장의 나머지는 상태기반 객체가 일급 함수와 어떻게 결합될 수 있는지 확장된 예제로 살펴본다. 우리는 디지털 회로의 시뮬레이터의 설계와 구현을 살펴볼 것이다. 첫 번째 디지털 회로를 위한 약간의 언어를 살펴보고 두 번째 간단하지만 이산(discrete) 사건 시뮬레이션을 위한 일반적인 프레임워크를 설명한다. 마지막으로  이산 시뮬레이션 프로그램이 어떻게 구성되고 빌드될 수 있는지를 살펴본다.</p>
+
+<p>이 예제는 고전인 &ldquo;Structure and Interpretation of Computer Programs (by Abelson and Sussman)"에서 따왔다. 다른 점은 구현 언어가 Scheme이 아니라 Scala이며 예제의 다양한 측면들이 4개의 소프트웨어 레이어로 구조화된다는 것인데, 하나는 시뮬레이션 프레임워크이고, 다른 하나는 기본 회로 시뮬레이션 패키지이고, 세번째는 사용자정의 회로 라이브러리이고, 마지막은 각각의 시뮬레이션되는 회로 자체이다. 각 레이어는 클래스로 표현되며, 좀 더 구체적이 레이어는 보다 일반적인 레이어를 상속한다.</p>
+
+<h1>18.4 A language for digital circuits</h1>
+
+<p>디지철 회로를 기술하는 작은 언어로 시작하자. 디지털 회로는 배선(wire)과 기능 박스(function box)로 만들어진다. 배선은 기능 박스에 의해 변환되는 신호를 전달한다. 신호는 boolean으로 표현되는데, true는 signal-on 상태이고 false는 signal-off 상태를 나타낸다.</p>
+
+<p>다음은 3가지 기본 기능 박스 (혹은 게이트)이다.</p>
+
+<ul>
+<li>inverter: 시그널의 부정을 취한다.</li>
+<li>and-gate: 입력에 대한 논리곱을 출력으로 설정한다.</li>
+<li>or-gate: 입력에 대한 논리합을 출력으로 설정한다.</li>
+</ul>
+
+
+<p>이런 게이트는 모든 다른 기능 박스(function box)를 만드는 데에 충분하다. 게이트에는 &ldquo;delay"가 있는데, 이 때문에 게이트의 출력은 입력이 바뀌고 지연 시간이 지난 후에야 바뀌게 된다.</p>
+
+<p>다음의 Scala 클래스와 함수 집합에 의해 디지털 회로의 요소들을 기술할 것이다. 먼저, 배선을 위한 Wire 클래스가 있다.</p>
+
+<p><code>scala
+val a = new Wire
+val b = new Wire
+val c = new Wire
+</code></p>
+
+<p>좀 더 간단한 같은 표현은 다음과 같다.</p>
+
+<p><code>scala
+val a, b, c = new Wire
+</code></p>
+
+<p>두 번째로, 필요한 기본 게이트를 &lsquo;만드는&rsquo; 3가지 프로시져들이다.</p>
+
+<p><code>scala
+def inverter(input: Wire, output: Wire)
+def andGate(a1: Wire, a2: Wire, output: Wire)
+def orGate(o1: Wire, o2: Wire, output: Wire)
+</code></p>
+
+<p>함수에 주안점을 둔 Scala에 있어 흔치 않은 것은 이런 프로시져는 결과로써 구성된 게이트를 반환하는 것이 아니라 부작용(side-effect)으로써 게이트를 만든다는 것이다. 예를 들면, <code>inverter(a, b)</code>의 호출은 배선 <code>a</code>와 <code>b</code> 사이의 인버터를 둔다.</p>
+
+<p>더 복잡한 기능은 기본 게이트로 만들 수 있다. 예를 들면, 다음은 반가산기를 구성한다. <code>halfAdder</code> 메소드는 두 개의 입력 <code>a</code>와 <code>b</code>를 취해 &ldquo;s = (a + b) % 2"로 정의된 합계 <code>s</code>를  연산하고,  "c = (a + b) /2"라고 정의된 자리올림수 <code>c</code>를 출력한다.</p>
+
+<p>``` scala
+def halfAdder(a: Wire, b: Wire, s: Wire, c: Wire) {</p>
+
+<pre><code>val d, e  = new Wire
+orGate(a, b, d)
+andGate(a, b, c)
+inverter(c, e)
+andGate(d, e, s)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>더 복잡한 회로를 구성하기 위해서는 <code>halfAdder</code> 메소드를 사용할 수 있다. 예를 들면, 다음은 전가산기를 나타낸다. 두 개의 입력 <code>a</code>와 <code>b</code>, 그리고 자리올림수 <code>cin</code>을 취해 <code>sum = (a + b + cin) % 2</code>로 정의되는 합계를 연산하고 <code>s</code> 그리고 <code>cout = (a + b + cin) / 2</code>로 정의된 자리올림수를 출력한다.</p>
+
+<p>``` scala
+def fullAdder(a: Wire, b: Wire, cin: Wire, sum: Wire, cout: Wire) {</p>
+
+<pre><code>val s, c1, c2 = new Wire
+halfAddr(a, cin, s, c1)
+halfAddr(b, s, sum, c2)
+orGate(c1, c2 cout)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>클래스 <code>Wire</code>와 함수 <code>inverter</code>, <code>andGate</code> 그리고 <code>orGate</code>는  사용자가 디지털 회로를 정의할 수 있게 되는 작은 언어를 대표한다. 이는 개별적으로 구현되어지기 보다는 호스트 언어 내에 라이브러리로 정의되는 내부 DSL(domain specific lanauge)의 좋은 예이다.</p>
+
+<p>회로 DSL 구현은 아직 해결되어야할 과제가 있다. DSL로 회로를 정의하는 목적이 회로를 시뮬레이션하는 것이기 때문에 이산 사건 시뮬레이션을 위한 일반적인 API에 기반을 두고 DSL을 구현하는 것이 타당하다. 다음 두 섹션은 먼저 시뮬레이션 API와 다음으로 그 위에 회로 DSL의 구현을 제시할 것이다.</p>
+
+<h1>18.5 The Simulation API</h1>
+
+<p>시뮬레이션 API는 다음에 나타나 있다. <code>org.stairwarybook.simulation</code> 패키지의 <code>Simulation</code>  클래스로 구성된다. 구체적인 시뮬레이션 라이브러리는 이 클래스를 상속해서 도메인 특정한 기능들을 증대시킬 것이다.</p>
+
+<p>이산 사건 시뮬레이션은 기술된 시간들에 사용자 정의 액션들을 수행한다. 구체적인 시뮬레이션의 하위 클래스에 의해 정의되는 액션들은 모두 공통적인 타입을 공유한다.</p>
+
+<p><code>scala
+type Action = () =&gt; Unit
+</code></p>
+
+<p>이 문장은 빈 매개변수 리스트를 취해 <code>Unit</code>을 반환하는 프로시져 타입의 별칭을 <code>Action</code>으로 정의한다. <code>Action</code>은 <code>Simulation</code> 클래스의 타입 멤버이다. 이를 <code>() =&gt; Unit</code> 타입의 좀더 읽기 쉬운 이름으로써 생각할 수 있다. 타입 멤버는 20.6에서 자세하게 설명될 것이다.</p>
+
+<p>액션이 수행될 때의 시간은 시뮬레이션되는 시간으로 실제 &ldquo;wall clock&rdquo; 시간과는 아무런 관련이 없다. 시뮬레이션되는 시간은 단순히 정수형으로 표시한다. 현재 시뮬레이션되는 시간은 private 변수로 유지한다.</p>
+
+<p><code>scala
+private var curtime : Int = 0
+</code></p>
+
+<p>이 변수는 현재 시간을 반환하는 public 접근자 메소드를 갖고 있다.</p>
+
+<p><code>scala
+def currentTime: Int = curtime
+</code></p>
+
+<p>private 변수와 public 접근자의 조합은 Simluation 클래스 밖에서 현재 시간이 수정되지 않는 것을 보장하는데 사용된다. 결국에는 시뮬레이션 시간 여행을 모델링하는 경우를 제외하면, 보통 현재 시간을 관리하는 시뮬레이션 객체를 원하지 않는다.</p>
+
+<p>``` scala
+abstract class Simulation {</p>
+
+<pre><code>type Action = () =&gt; Unit        
+
+case class WorkItem(time: Int, action: Action)
+
+private var curtime = 0
+def currentTime: Int = curtime
+
+private var agenda: List[WorkItem] = List()
+private def insert(ag: List[WorkItem], item: WorkItem): List[WorkItem] = {
+    if(ag.isEmpty || item.time &lt; ag.head.time) time :: ag 
+    else ag.head :: insert(ag.tail, item)
+}
+
+def afterDelay(delay: Int)(block: =&gt; Unit) {
+    val item = WorkItem(currentItem + delay, () =&gt; block)
+    agenda = insert(agenda, item)
+}
+
+private def next() {
+    (agenda: @unchecked) match {
+        case item :: rest =&gt;
+            agenda = rest
+            curtime = item.time
+            item.action()
+    }
+}
+
+def run() {
+    afterDelay(0) {
+        println("*** simulation started, time = " + currentTime  + " ***")
+    }
+
+    while (!agenda.isEmtpy)next()
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>특정 시간에 실행되는 액션을 작업 항목(Work Item)이라고 부른다. 작업 항목은 다음의 클래스로 구현된다.</p>
+
+<p><code>scala
+case class WorkItem(item: Int, action: Action)
+</code></p>
+
+<p><code>WorkItem</code> 클래스를 <code>case</code> 클래스로 만들었다. 이는 클래스의 인스턴스를 생성하는 <code>WorkItem</code>이란 factory 메소드를 사용할 수 있고, 생성자 매개변수 <code>time</code>과 <code>action</code> 억세스 하는 접근자를 제공하는 편리한 문법을 가져다준다.</p>
+
+<p><code>Simulation</code> 클래스는 아직 실행되지 않은 모든 남은 작업 항목의 목록을 지닌다. 작업 항목은 이들이 실행되는 시뮬레이션 시간에 의해 정렬된다.</p>
+
+<p><code>scala
+private var agenda: List[WorkItem] = List()
+</code></p>
+
+<p><code>agenda</code>는 이를 갱신하는 <code>insert</code> 메소드에 의해 적당히 정렬된 순서로 유지된다. <code>insert</code> 메소드가 <code>afterDelay</code>에서 호출되는 것을 볼 수 있는데, 이는 <code>agenda</code>에 작업 목록을 추가하는 유일한 방법이다.</p>
+
+<p>``` scala
+def afterDelay(delay: Int)(block: => Unit) {</p>
+
+<pre><code>val item = WorkItem(currentTime + delay, () =&gt; block)
+agenda = insert(agenda, item)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이름이 함축하는 것처럼, 이 메소드는 (block에 의해 주어진) 액션을 <code>agenda</code>에 추가함으로써 현재 시뮬레이션 시간 이후  <code>delay</code> 시간 단위에 실행하는 스케쥴을 잡게 된다. 예를 들면, 다음 호출은 <code>currentTime + delay</code> 시뮬레이션 시간에 실행되는 새 작업 목록을 생성한다.</p>
+
+<p><code>scala
+afterDelay(delay) { count += 1}
+</code></p>
+
+<p>실행되는 코드는 메소드의 두번째 인자에 포함되어 있다. 이 인자의 정식 매개변수는 &ldquo; => Unit&rdquo; 타입이다. by-name 매개변수는 함수에 전달될 때 평가되지 않는다. 그래서 위의 호출에서는 <code>count</code>는 시뮬레이션 프레임워크가 작업 목록에 저장된 액션을 호출할 때만 증가된다. <code>afterDelay</code>는 커리 함수(curried function)임을 주목하자. 이는 9.5 섹션에서 소개된  커링(curring)이 메소드 호출을 좀 더 내장된 문법처럼 보이게 하는데 사용될 수 있다는 원리의 좋은 예이다.</p>
+
+<p>생성된 작업 목록은 여전히 <code>agenda</code>에 입력될 필요가 있으며, <code>insert</code> 메소드에 의해 이뤄지는데, 이는 <code>agenda</code>가 시간순으로 정렬되는 불변성(invariant)을 지켜준다.</p>
+
+<p>``` scala
+private def insert(ag: List[WorkItem], item: WorkItem): List[WorkItem] =</p>
+
+<pre><code>if(ag.isEmpty || item.time &lt; ag.head.time) item :: ag 
+else ag.head :: insert(ag.tail, item)
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>Simulation</code> 클래스의 핵심은 <code>run</code> 메소드에 의해 정의된다.</p>
+
+<p>``` scala
+def run() {</p>
+
+<pre><code>afterDelay(0) {
+    println("*** simulation started, time = " + currentTime + """)
+}
+
+while(!agenda.isEmtpy) next()
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이 메소드는 반복적으로 <code>agenda</code>의 첫번째 항목을 가져와, 이를 <code>agenda</code>에서 제거하여 실행되며 <code>agenda</code>에 더 이상의 항목이 없을 때까지 이뤄진다. 각 스텝은 <code>next</code> 메소드 호출에 의해 수행되고, 이는 다음과 같이 정의된다.</p>
+
+<p>``` scala
+private def next() {</p>
+
+<pre><code>(agenda: @unchecked) match {
+    case item :: rest =&gt; 
+        agenda = rest
+        curtime = item.time
+        item.action()
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>next</code> 메소드는 현재 목록을 패턴 매칭으로 앞 항목 <code>item</code>과 작업 항목의 남은 리스트 <code>rest</code>로 분할한다. 현재 목록에서 앞 항목을 제거하고 시뮬레이션 시간 <code>curtime</code>을 작업 항목의 시간으로 설정하여 작업 항목의 액션을 실행한다.</p>
+
+<p><code>agenda</code>가 비어 있지 않을 때만 <code>next</code> 가 호출될 수 있다는 것을 주목하자. 빈 리스트에 해당하는 case가 없으니 빈 <code>agenda</code>에 <code>next</code>를 실행하려고 하면 <code>MatchError</code> 예외를 얻게 된다.</p>
+
+<p>Scala 컴파일러는 리스트의 가능한 패턴 중 하나를 놓친 것에 대해 경고한다.</p>
+
+<pre><code>Simulator.scala:19: warning: match is not exhaustive!
+missing combination
+
+    agenda match {
+    ^
+
+one warning found
+</code></pre>
+
+<p>이럴 경우 놓친 case는 문제가 되지 않는데, 왜냐하면 <code>next</code>가 오직 비어 있지 않은 <code>agenda</code>에 대해서만 호출될 것을 알고 있기 때문이다. 그러므로, 이 경고를 비활성화시키고 싶을 것이다. 이는 <code>Simulation</code> 코드가 <code>agenda match</code>가 아닌 <code>(agenda: @unchecked) match</code>를 사용하는 이유이다.</p>
+
+<h1>18.6 Circuit Simulation</h1>
+
+<p>다음 스텝은 섹션 18.4에 그려진 회로를 위한 DSL을 구현하기 위해 시뮬레이션 프레임워크를 사용하는 것이다.  회로 DSL은 배선 클래스와 AND 게이트, OR 게이트, 그리고 반가산기를 생성하는 메소드로 구성된다는 것을 상기하라. 이들은 시뮬레이션 프레임워크를 확장하는 <code>BasicCircuitSimulation</code> 클래스에 모두 포함된다. 다음이 이 클래스이다.</p>
+
+<p>``` scala
+package org.stairwaybook.simulation</p>
+
+<p>abstract class BasicCircuitSimulation extends Simulation {</p>
+
+<pre><code>def InverterDelay: Int
+def AndGateDelay: Int
+def OrGateDelay: Int
+
+class Wire {
+    private var sigVal = false
+    private var actions: List[Action] = List()
+
+    def getSignal = sigVal
+
+    def setSignal(s: Boolean) = {
+        if(s != sigVal) {
+            sigVal = s
+            actions foreach (_ ())
+        }
+
+    def addActions(a: Action) = {
+        actions = a :: actions
+        a()
+    }
+}
+
+def inverter(input: Wire, output: Wire) = {
+    def invertAction() {
+        val inputSig = input.getSignal
+        afterDelay(InverterDelay) {
+            output setSignal !inputSig
+        }
+    }
+    input addAction invertAction
+}
+
+def addGate(al: Wire, a2: Wire, output: Wire) = {
+    def andAction() = {
+        val a1Sig = a1.getSignal
+        val a2Sig = a2.getSignal
+        afterDelay(AngGateDelay) {
+            output setSignal (a1Sig &amp; a2Sig)
+        }
+    }
+    a1 addAction andAction
+    a2 addAction andAction
+}
+
+
+def orGate(o1: Wire, o2: Wire, output: Wire) {
+    def orAction() {
+        val o1Sig = o1.getSignal
+        val o2Sig = o2.getSignal
+        afterDelay(OrGateDelay) {
+            output setSignal (o1Sig | o2Sig)
+        }
+    }
+
+    o1 addAction orAction
+    o2 addAction orAction
+}
+
+def probe(name: String, wire: Wire) {
+    def probeAction() {
+        println(name + " " + currentTime + " new-value = " + wire.getSignal)
+    }
+
+    wire addAction probeAction
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>실제 지연은 이 클래스 레벨에서는 알 수 없다. 왜냐하면 이들은 시뮬레이터되는 회로에 의존하기 때문이다. 그래서 구체적인 정의는 하위 클래스에 위임하도록 지연값들이 추상 <code>BasicCircuitSimulation</code> 클래스 내에 선언되었다.</p>
+
+<h2>The Wire class</h2>
+
+<p>배선 클래스는 다음의 3가지 기본 액션을 지원한다.</p>
+
+<ul>
+<li>getSignal: Boolean 배선의 현재 신호를 반환한다.</li>
+<li>setSignal(sig: Boolean): 배선의 신호를 sig에 설정한다.</li>
+<li>addAction(p: Action): 주어진 프로시져 p를 배션의 액션에 첨부한다. 아이디어는 어떤 배선에 첨부된 모든 액션의 프로시저가 배선의 신호가 바뀌는 시간마다 실행되도록 하는 것이다. 즉, 첨부된 액션은 배선에 추가된 시간에 한번, 그 이후에는 배선의 신호가 변경될 때마다 실행된다.</li>
+</ul>
+
+
+<p>두 개의 <code>private</code> 변수는 배선의 상태를 형성한다. <code>sigVal</code> 변수는  현재 신호와 <code>actions</code> 변수는 현재 배선에 첨부되는 액션의 프로시저를 나타낸다.</p>
+
+<p>흥미로운 메소드의 구현은 <code>setSignal</code>이다. 배선의 신호가 변경되었을 때 새 값을 변수 <code>sigVal</code>에 저장하고 나아가 배선에 첨부된 모든 액션들이 실행된다. 이에 대한 단축 문법은  <code>action foreach (_ ())</code>으로  함수 <code>_ ()</code>를 <code>action</code> 리스트의 각 요소에  적용한다. 섹션 8.5에서 설명된 것처럼 함수 <code>_ ()</code>은 <code>f =&gt; f()</code>의 단축 표현으로 함수를 취해서 이를 빈 매개변수 리스트에 적용한다.</p>
+
+<h2>The inverter method</h2>
+
+<p>인버터를 생성한 결과는 액션이 자신의 입력 배선에 설치되는 것뿐이다. 이 액션은 설치되는 시점에 한번 그후에는 입력 신호가 변경될 때마다 매번 호출된다. 액션의 영향으로 인버터 입력값의 반전시킨 값이 출력값으로 설정된다. 인버터 게이트가 지연값을 가지기 때문에 이 변화값은 입력값이 바뀌어 액션이 실행돤 후 시뮬레이션 시간의 <code>InverterDelay</code> 만큼 영향을 받아야 한다.</p>
+
+<p>``` scala
+def inverter(input: Wire, output: Wire) = {</p>
+
+<pre><code>def invertAction() {
+    val inputSig = input.getSignal
+    afterDelay(InverterDelay) {
+        output setSignal !inputSig
+    }
+}
+input addAction invertAction
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>inverter</code> 메소드의 영향으로 <code>input</code> 배선에 <code>invertAction</code>이 추가된다.  이 액션은 호출될 때, 입력 신호를 얻어와  시뮬레잉션 아젠다에 <code>output</code> 신호를 반전하는 다른 액션을 설치한다. 이 다른 액션은 시뮬레이션 시간의 <code>InverterDay</code> 만큼 후에 실행되는 것이다.</p>
+
+<h2>The andGate and orGate methods</h2>
+
+<p>AND 게이트 구현은 인버터 구현과 유사하다. AND 게이트 목적은 입력 신호의 합(conjunction) 을 출력하는 것이다. 이는 두 입력 중 하나의 변화 이후 시뮬레이트된 <code>AndGateDelay</code> 시간 단위에서 발생해야 한다.  따라서 다음과 같이 구현된다.</p>
+
+<p>``` scala
+def andGate(a1: Wire, a2: Wire, output: Wire) = {</p>
+
+<pre><code>def andAction() = {
+    val a1Sig = a1.getSignal
+    val a2Sig = a2.getSignal
+    afterDelay(AndGateDelay) {
+        output setSignal (a1Sig &amp; a2Sig)
+    }
+}
+a1 addAction andAction
+a1 addAction andAction
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>andGate</code> 메소드의 영향으로  <code>addAction</code>을 입력 배선 <code>a1</code>과 <code>a2</code> 모두에 추가된다. 이 액션은 호출될 때, 입력 시그널 모두를 얻어와 입력 시그널의 합에 대한 <code>output</code> 신호를 설정하는 다른 액션을 설치한다. 이 다른 액션은 시뮬레이트 시간 <code>AndGateDelay</code> 단위 이후에 실행된다. 입력 배선이 달라지면 출력이 재계산되어야 한다는 것을 주의하라. 그래서 두 입력 배선 <code>a1</code>과 <code>a2</code> 각각에 대해 <code>andAction</code>이 설치된다. <code>orGate</code> 메소드는 논리합 대신 논리곱을 수행하는 것을 제외하면 비슷하게 구현된다.</p>
+
+<h2>Simulation output</h2>
+
+<p>시뮬레이터를 실행하려면 배선의 신호 변화를 검사하는 방법이 필요하다. 이를 해내기 위해서 배선에 조사자(probe)를 두는 액션을 시뮬에이션할 수 있다.</p>
+
+<p>``` scala
+def probe(name: String, wire: Wrie){</p>
+
+<pre><code>def probeAction() {
+    println(name + " " + currentTime + " new-value = " + wire.getSignal)
+}
+
+wire addAction probeAction
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>probe</code> 프로시저의 영향으로 주어진 배선에 <code>probeAction</code>이 설치된다. 늘 하던대로, 설치된 액션은 배선 신호가 변화될 때마다 실행된다. 이 경우는 단순히 배선의 이름과 마찬가지로 현재 시뮬레이션 시간 그리고 배선의 새로운 값을 출력한다.</p>
+
+<h2>Running the simulator</h2>
+
+<p>시뮬레이터를 구동해볼 시간이다. 구체적인 시뮬레이션을 정의하기 위해 시뮬레이션 프레임워크를 상속할 필요가 있다. 관심있는 것을 보기 위해, <code>BasicCircuitSimulation</code>을 상속하는 추상 시뮬레이션 클래스를 생성하고 이번 장과 18.6장, 18.7장에서 살펴본 것처럼 반가산기와 전가산기를 위한 메소드 정의를 포함할 것인데, 이를 <code>CircuitSimulation</code>이라 부르며 이상 다음과 같다.</p>
+
+<p>``` scala
+package org.stairwaybook.simulation</p>
+
+<p>abstract class CircuitSimulation extends BasicCircuitSimulation {</p>
+
+<pre><code>def halfAdder(a: Wire, b: Wire, s: Wire, c: Wire) {
+    val d, e = new Wire
+    orGate(a, b, d)
+    andGate(a, b, c)
+    inverter(c, e)
+    andGate(d, e, s)
+}
+
+def fullAdder(a: Wire, b: Wire, cin: Wire, sum: Wire, cout: Wire) {
+    val s, c1, c2 = new Wire
+    halfAdder(a, cin, s, c1)
+    halfAdder(b, s, sum, c2)
+    orGate(c1, c2, cout)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>구체적인 회로 시뮬레이션은 <code>CircuitSimulation</code> 클래스로부터 상속된 객체일 것이다. 그 객체는 시뮬레이트되는 회로 구현 기술에 따라 게이트 지연을 수정할 필요가 있다. 마지막으로, 시뮬레이션할 구체적인 회로를 정의할 필요가 있다. 이런 단계는 Scala 인터프리터로 대화식으로 행할 수 있다.</p>
+
+<p><code>scala
+scala&gt; import org.stairwaybook.simulation._
+</code></p>
+
+<p>먼저, 게이트 지연이다. <code>MySimulation</code>이라 부르는 객체를 정의하고 어떤 숫자를 입력하자.</p>
+
+<p>``` scala
+scala> object MySimulation extends CircuitSimulation {</p>
+
+<pre><code>def InverterDelay = 1
+def AndGateDelay = 3
+def OrGateDelay = 5
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>MySimulation</code> 객체 멤버를 반복적으로 억세스할 것이기 때문에, 객체의 import로 이후의 코드를 줄여쓴다.</p>
+
+<pre><code>scala&gt; import MySimulation._
+</code></pre>
+
+<p>다음은 회로이다. 4개의 배선을 정의하고 그들 중 두 개에 조사자(probe)를 둔다.</p>
+
+<pre><code>scala&gt; val input1, input2, sum, carry = new Wire
+scala&gt; probe("sum", sum)
+sum 0 new-value = false
+scala&gt; probe("carry", carry)
+carry 0 new-value = false
+</code></pre>
+
+<p>조사자(probe)가 즉시 출력을 찍었다는 것을 주목하라. 이는 배선에 설치된 모든 액션은 처음 액션을 설치했을 때 실행된다는 사실의 결과이다.</p>
+
+<p>이제 배선을 연결하는 반가산기를 정의하자.</p>
+
+<pre><code>scala&gt; halfAdder(input1, input2, sum, carry)
+</code></pre>
+
+<p>마지막으로, 하나씩, 두 입력 배선에 <code>true</code> 설정하고, 시뮬레이션을 실행하자.</p>
+
+<pre><code>scala&gt; input1 setSignal true
+
+scala&gt; run()
+*** simulation started, time = 0 ***
+sum 8 new-value = true
+
+scala&gt; input2 setSignal true
+scala&gt; run()
+*** simulation started, time = 8 ***
+carry 11 new-value = true
+sum 15 new-value = false
+</code></pre>
+
+<h1>18.7 Conclusion</h1>
+
+<p>이 장에서는 가변 상태(mutable state)와 고차함수(higher-order function) 이질적으로 보이는 두 개의 기술을 함께 다뤘다. 가변 상태는 물리적 엔티티의 상태가 시간이 지남에 따라 변경되는 것을 시뮬레이션하는데 사용되었고 고차함수는 시뮬레이션 시간에 특정한 점에서 액션을 실행하는 시뮬레이션 프레임워크에서 사용되었다. (이하 생략)</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 17장]]></title>
+    <link href="http://cluno.github.io/blog/2013/05/01/programming-in-scala-17-jang/"/>
+    <updated>2013-05-01T17:37:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/05/01/programming-in-scala-17-jang</id>
+    <content type="html"><![CDATA[<p>17장부터는 음슴체를 사용하지 않으려 합니다.</p>
+
+<!-- more -->
+
+
+<h1>17 Collections</h1>
+
+<h2>17.1 Sequences</h2>
+
+<p>시퀀스는 순서대로 나열된 데이터 그룹에 대해 동작한다. 정돈된 요소들이기 때문에 첫 번째 요소, 두 번째 요소, 103번째 요소 등을 요구할 수 있다.</p>
+
+<h3>List</h3>
+
+<p>리스트는 리스트의 시작 부분에 빠른 삽입과 삭제를 지원한다. 그러나 임의의 인덱스에 대한 빠른 접근은 제공하지 않는데, 그 구현이 리스트를 통해 연속적으로 반복되어야 하기 때문이다. (※. 뭔소리야? )</p>
+
+<p>이런 특징들의 조합이 이상하게 들리겠지만, 이들은 많은 알고리즘에 잘 동작하는 sweet spot을 찾아낸다. 시작 요소의 빠른 삽입과 삭제는 패턴매칭에 잘 동작하고, 리스트의 불변성은 복사본을 만들 필요가 없기 때문에 정확하고 효율적인 알고리즘을 개발하는데 좋다.</p>
+
+<p>다음은 리스트를 어떻게 초기화하고 어떻게 리스트의 머리와 꼬리에 접근하는지 보여주는 예제이다.</p>
+
+<p><code>scala
+val colors = List("red", "blue", "green") // List(red, blue, green)
+colors.head // red
+colors.tail // List(blue, green)
+</code></p>
+
+<p>리스트 소개는 3.8장, 리스트의 사용은 16장, 리스트의 구현은 22장을 참조한다.</p>
+
+<h3>Arrays</h3>
+
+<p>배열은 0부터 시작하는 인덱스로 요소를 획득하고 갱신하는 모든 임의 요소에 대해 접근성이 좋다. 다음은 크기는 알고 있지만, 아직 요소의 값은 모를 때 배열을 생성하는 예제이다.</p>
+
+<p><code>scala
+val fiveInts = new Array[Int](5) // Array(0, 0, 0, 0, 0)
+</code></p>
+
+<p>다음은 요소의 값을 알고 있을 때 배열을 초기화하는 예제이다.</p>
+
+<p><code>scala
+val fiveToOne = Array(5, 4, 3, 2, 1) // Array(5, 4, 3, 2, 1)    
+</code></p>
+
+<p>Scala에서 배열은 Java처럼 꺽쇠괄호가 아닌 둥근괄호로 억세스한다. 다음은 배열 요소를 접근하고 갱신하는 예제이다.</p>
+
+<p><code>scala
+fiveInts(0) = fiveToOne(4) // Array(1, 0, 0, 0, 0)
+</code></p>
+
+<p>Scala 배열은 Java 배열처럼 같은 방식으로 표현된다. Java 매소드를 사용해서 배열을 반환할 수 있다. Scala 배열과 Java 배열의 차이점은 19.3장에서 다룬다.</p>
+
+<h3>List Buffers</h3>
+
+<p>클래스 <code>List</code>는 리스트 꼬리가 아닌 머리에 대한 접근이 빠르다. 따라서, 리스트 마지막에서부터 append해서 리스트를 만들어 갈 경우, 리스트 앞에 prepend한 후 <code>reverse</code>를 호출하는 게 좋다.</p>
+
+<p><code>reverse</code>를 회피하는 대안으로는 <code>ListBuffer</code>를 사용하는 것이다. <code>ListBuffer</code>는 변경 가능한 객체로, 상수 시간(constant time)이 소요되는  append와 prepend 연산을 제공한다.</p>
+
+<p>append는 <code>+=</code> 연산자를, prepend는 <code>+=:</code> 연산자를 사용한다. 다 만들어지면 <code>toList</code>를 호출하여 <code>List</code>를 획득한다.</p>
+
+<p>``` scala
+import scala.collection.mutable.ListBuffer</p>
+
+<p>val buf = new ListBuffer[Int]
+buf += 1 // ListBuffer(1)
+buf += 2 // ListBuffer(1, 2)
+buf // ListBuffer(1, 2)
+3 +=: buf // ListBuffer(3, 1, 2)
+buf.toList // List(3, 1, 2)
+```</p>
+
+<p><code>ListBuffer</code>를 사용하는 다른 이유는 잠재적인 스택 오버플로우(stack overflow)를 방지하기 위함이다. prepend할 때 요구되는 알고리즘이 tail recursion이 아닐 경우에 <code>for</code>나 <code>while</code>의 반복문 그리고 <code>ListBuffer</code>를 사용할 수 있다. (※. 8.9 Tail recursion(p. 159)을 참고. 기타 <a href="https://groups.google.com/d/msg/scala-korea/5PCCAS8wu8o/SMbcFzmTEy8J">라 스칼라 코딩단 Tail Recursion 논의</a>)</p>
+
+<h3>ArrayBuffer</h3>
+
+<p><code>ArrayBuffer</code>는 시쿼스의 처음과 끝에서 요소를 삽입/삭제할 수 있다는 것을 제외하면 배열과 비슷하다. 모든 <code>Array</code> 오퍼레이션을 사용할 수 있으나 약간 느리다. 새로운 삽입과 삭제는 평균적으로 상수 시간(constant time)이 소요되나 버퍼의 내용이 담긴 새로운 배열을 할당하기 때문에 가끔 선형적이다.</p>
+
+<p><code>ArrayBuffer</code>를 사용하려면, 먼저 가변 콜렉션 패키지에서 이를 임포트한다.</p>
+
+<p><code>scala
+import scala.collection.mutable.ArrayBuffer
+</code></p>
+
+<p><code>ArrayBuffer</code>를 생성할 때는 반드시 타입 매개변수를 기술해야 한다. 그러나 길이는 기술하지 않아도 된다. <code>ArrayBuffer</code>는 필요에 따라 할당된 공간이 자동으로 조정된다.</p>
+
+<p><code>scala
+val buf = new ArrayBuffer[Int]()
+</code></p>
+
+<p><code>+=</code> 메소드로 append할 수 있다.</p>
+
+<p><code>scala
+buf += 12 // buf.type = ArrayBuffer(12)
+buf += 15 // buf.type = ArrayBuffer(12, 15)
+buf // ArrayBuffer(12, 15)
+</code></p>
+
+<p>일반적인 배열 메소드를 모두 사용할 수 있다. 예를 들면, 다음과 같다.</p>
+
+<p><code>scala
+buf.length // 2
+buf(0) // 12
+</code></p>
+
+<h3>String (via StringOps)</h3>
+
+<p>많은 시퀀스 메소드가 구현된 <code>StringOps</code> 시퀀스를 주목해 보자. <code>Predef</code>가 <code>String</code>에서 <code>StringOps</code>로 암묵적인 변환을 수행하기 때문에 다음 예제처럼 어떤 문자열도 시퀀스처럼 다룰 수 있다.</p>
+
+<p>``` scala
+def hasUpperCase(s: String) = s.exists(_.isUpper)</p>
+
+<p>hasUpperCase(&ldquo;Robert Frost&rdquo;) // true
+hasUpperCase(&ldquo;e e commings&rdquo; // false
+```</p>
+
+<p><code>hasUpperCase</code> 메소드 바디에 있는 문자열 <code>s</code>에 호출된 <code>exists</code> 메소드는 문자열 객체에 존재하지 않는다. Scala 컴파일러가 암묵적으로 <code>s</code>를 이 메소드를 가진 <code>StringOps</code>로 변환하고, <code>exists</code> 메소드는 문자열을 캐릭터 시퀀스로 다룬다.</p>
+
+<h2>17.2 Sets and maps</h2>
+
+<p>기본적인 set과 map은 3.10장에서 살펴보았다.</p>
+
+<p>Scala에서는 가변/불변 set과 map을 제공한다. set의 계층 구조는 48쪽 그림 3.2에,  map의 계증 구조는 50쪽의 그림 3.3에 나타나 있다. 그림에서 보다시피 <code>Set</code>과 <code>Map</code>이라는 이름은 각각 다른 패키지에 존재하며 3개의 trait에 의해 사용된다.</p>
+
+<p><img src="http://j2eethoughts.files.wordpress.com/2010/10/collections-set.jpg" alt="set 계층구조" /></p>
+
+<p><img src="http://j2eethoughts.files.wordpress.com/2010/10/collections-map1.jpg" alt="set 계층구조" /></p>
+
+<p><code>Set</code>과 <code>Map</code>이라고 쓰면 기본적으로 불변 객체를 얻게 된다. 가변 객체는 명시적으로 임포트해야 한다. Scala에서는 모든 소스에 암묵적으로 임포트되는 <code>Predef</code> 객체로 다음과 같이 불변 객체에 쉽게 접근할 수 있다.</p>
+
+<p>``` scala
+object Predef {</p>
+
+<pre><code>type Map[A, +B] = collection.immutable.Map[A, B]
+type Set[A] = collection.immutable.Set[A]
+val Map = collection.immutable.Map
+val Set = collection.immutable.Set
+// ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>type</code> 키워드는 긴 FQN(fully qualified name)에 대한 별칭으로 <code>Set</code>과 <code>Map</code>을 정의하기 위해 <code>Predef</code>에서 사용되고 있다. <code>Map</code>은 <code>Predef.Map</code>과 같고, <code>Predef.Map</code>은  <code>collection.immtuable.Map</code>과 같다. 이는 <code>Map</code> 타입과 객체에 대해 동일하다.</p>
+
+<p>한 소스 파일에서 가변/불변 set 또는 map을 같이 사용하려면 가변형(mutable variant)를 지닌 패키지 이름을 임포트한다.</p>
+
+<p><code>scala
+import scala.collection.mutable // import scala.collection.mutable
+</code></p>
+
+<p>이제  불변 set은 <code>Set</code>으로 참조, 가변 set은  <code>mutable.Set</code>으로 참조된다.</p>
+
+<p><code>scala
+val mutaSet = mutable.Set(1, 2, 3) // Set(3, 1, 2)
+</code></p>
+
+<h3>Using sets</h3>
+
+<p>set의 키(key)는 <code>==</code> 에 의해 결정되고  많아봐야 (set 내에서) 하나뿐인 객체임을 보장하는 특성이 있다.</p>
+
+<p>예제로 한 문자열 내에 다른 단어들의 개수를 세기 위해 set을 사용해보자.</p>
+
+<p>단어 구분자로 공백과 구두점을 기술할 경우, 문자열에서 <code>split</code> 메소드는 한 문자열을 여러 단어로 분리할 수 있다. 구분자 정규표현식은 <code>[!,.]+</code>로 충분하다.</p>
+
+<p><code>scala
+val text = "See Spot run. Run, Spot. Run!"
+val wordArray = text.split("[!,.]+")  // Array(See, Spot, run, Run, Spot, Run)
+</code></p>
+
+<p>고유한 단어의 개수를 세기 위해, 이들을 같은 케이스로 변환한 다음, 이들을 set에 추가한다. set은 중복된 값들을 배제하기 때문에 각각 구분된 단어는 set에서 정확하게 한번 나타난다.</p>
+
+<p>먼저, <code>empty</code> 메소드를 사용해서 빈 set을 생성해보자.</p>
+
+<p><code>scala
+val words = mutable.Set.empty[String] // scala.collection.mutable.Set[String] = Set()
+</code></p>
+
+<p>이후 <code>for</code> 문으로 단어에 대해 반복해가며 각 단어를 소문자로 변환하고 이를 <code>+=</code> 연산자로 가변 set을 추가한다.</p>
+
+<p>``` scala
+for (word &lt;&ndash; wordsArray)</p>
+
+<pre><code>words += word.toLowerCase
+</code></pre>
+
+<p>words // Set(spot, run, see)
+```</p>
+
+<p>따라서, 이 텍스트는 정확하게 3개의 구분된 단어 (spot, run, see)를 포함한다는 것을 알 수 있다.</p>
+
+<p>가변/불변 set에서 가장 일반적으로 사용되는 메소드가 표 17.1에 제시되어 있다. (p. 346)</p>
+
+<h3>Using maps</h3>
+
+<p>map은 콜렉션의 각 요소와 값을 연결 짓는다. map은 0부터 시작하는 정수가 아닌 어떤 종류의 key를 쓸 수 있는 것을 제외하면 배열을 사용하는 것과 비슷하다.</p>
+
+<p>예제로 <code>scala.collection.mutable</code> 패키지를 임포트해서, 빈 가변  map을 생성해보자.</p>
+
+<p><code>scala
+val map = mutable.Map.empty[String, Int] // scala.collection.mutable.Map[String, Int] = Map()
+</code></p>
+
+<p>map을 생성할 때는 두 개의 타입을 기술해야 한다. 첫째 타입은 map의 key에 대해 두 번째 타입은 value에 대한 것이다.</p>
+
+<p>map의 엔트리를 세팅하는 것은 배열의 엔트리를 세팅하는 것과 비슷하다.</p>
+
+<p><code>scala
+map("hello") = 1
+map("there") = 2
+map // Map(hello -&gt; 1, there -&gt; 2)
+</code></p>
+
+<p>map을 읽는 것도 배열을 읽는 것과 비슷하다.</p>
+
+<p><code>scala
+map("hello") // 1
+</code></p>
+
+<p>모두 조립하면 문자열에서 각 단어가 나타나는 회수를 세는 메소드는 다음과 같다.</p>
+
+<p>``` scala
+def countWords(text: String) = {</p>
+
+<pre><code>val counts = mutable.Map.empty[String, Int]
+for(rawWord &lt;- text.split("[,!.]+")) {
+    val word = rainWord.toLowerCase
+    val oldCount = 
+        if (counts.contains(word)) counts(word)
+        else 0
+    counts += (word -&gt; (oldCount + 1))
+}
+counts
+</code></pre>
+
+<p>}</p>
+
+<p>countsWords(&ldquo;See Spot run! Run, Spot, Run!&rdquo;) // Map(see &ndash;> 1, run &ndash;> 3, spot &ndash;> 2)
+```</p>
+
+<h3>Defaults sets and maps</h3>
+
+<p>대개의 경우는 `Set(), scala.collection.mutable.Map()&lsquo; 등의 팩토리 메소드에 의해 제공되는 가변/불변 set과 map의 구현체들로 충분하다. 이런 팩토리 메소드에 의해 제공된 구현체들은 해쉬 테이블을 포함, 빠른 룩업 알고리즘을 사용하여 콜렉션에 객체가 있는지 없는지 재빨리 결정한다.</p>
+
+<p>예를 들어, <code>scala.collection.mutable.Set()</code> 팩토리 메소드는 해쉬테이블을 내부적으로 사용하는 <code>scala.collection.mutable.HashSet</code>를 반환하고, 비슷하게  <code>scala.collection.mutable.Map()</code> 팩토리 메소드는 <code>scala.collection.mutable.HashMap</code>을 반환한다.</p>
+
+<p>불변 set과 map은 좀 더 많은 팩토리 메소드가 있다. 예를 들어, <code>scala.collection.immutable.Set()</code> 팩토리 메소드에 의해 반환되는 클래스는 표 17.3 (p. 350) 처럼 얼마나 많은 요소를 전달하는지에 따라 달라진다.</p>
+
+<p>5개의 요소보다 작은 set의 경우, 성능을 최대화하기 위한 특별한 클래스가 각 특정 크기의 set에 대해 전적으로 할당된다. 5개나 혹은 그 이상의 요소를 지닌 set을 요청할 경우, 팩토리 메소드는 해싱을 사용하는 구현체(HashSet)를 반환한다.</p>
+
+<p>비슷하게 <code>scala.collection.immutable.Map()</code> 팩토리 메소드는 표 17.4 (p. 350)처럼 전달하는 key-value 쌍이 얼마나 많은 지에 따라 다른 클래스를 반환한다. map도 성능을 최대화하기 위해 set과 마찬가지로 5개의 요소보다 작은 map의 경우 각 특정 크기의 map이 전적으로 할당된다. 5개 이상의 요소를 지난 map을 요청할 경우, 팩토리 메소드는 해싱을 사용하는 구현체(HashMap)를 반환한다.</p>
+
+<p><code>EmtpySet</code>에 요소를 하나 추가하면, <code>Set1</code>를 반환한다. <code>Set1</code>에 요소를 추가하면 <code>Set2</code>를 반환한다. <code>Set2</code>에서 요소를 하나 삭제하면, 다른 <code>Set1</code>을 얻게 된다.</p>
+
+<h3>Sorted sets and maps</h3>
+
+<p>가끔 set과 map의 반복자가 특정한 순서대로 요소를 반환하는 필요가 있다. 이를 위해 Scala 콜렉션 라이브러리는 <code>SortedSet</code>과 <code>SortedMap</code>을 제공한다. 이런 <code>trait</code>는  <code>TreeSet</code>과 <code>TreeMap</code> 클래스에 의해 구현된다. 이들은 순서대로 요소나 키를 유지하는 레드-블랙(red-black) 트리를 사용한다.</p>
+
+<p>순서는 <code>Ordered</code> 트레이트에 의해 결정되는데, 이들은 set의 요소 타입 혹은 map의 키 타입이며 반드시 섞여지거나 암묵적으로 변경 가능하는 것들이어야 한다. 이런 클래스는 가변형만 제공하고 있다.</p>
+
+<p>TreeSet 예제</p>
+
+<p><code>scala
+import scala.collection.immutable.TreeSet
+val ts = TeeSet(9, 3, 1, 8, 0, 2, 7, 4, 6, 5)
+val cs = TreeSet('f', 'u', 'n')
+</code></p>
+
+<p>TreeMap 예제</p>
+
+<p><code>scala
+import scala.collection.immutable.TreeMap
+var tm = TreeMap(3 -&gt; 'x'. 1 -&gt; 'x', 4 -&gt; 'x')
+tm += (2 -&gt; 'x')
+™ // (Map 1 -&gt; x, 2 -&gt; x, 3 -&gt; x,  4 -&gt; x)
+</code></p>
+
+<h2>17.3 Selecting mutable versus immutable collections</h2>
+
+<p>불변 콜렉션을 가변 콜렉션으로 또는 엮으로 스위칭하는 쉬운 방법은 Scala의 문법적 도구(syntactic sugar)를 이용하는 것이다. 가변 set과 map이  += 메소드를 제공하지 않지만, Scala는 +=에 대해 선택적인 해석을 한다. <code>a += b</code>를 쓰면, <code>a</code>는 <code>+=</code>라는 이름의 메소드를 제공하지 않으므로 Scala는 <code>a = a + b</code>처럼 해석하려고 한다.</p>
+
+<p>예를 들면, 불변 set은 <code>+=</code> 연산자를 제공하지 않는다.</p>
+
+<p><code>scala
+val people = Set("Nancy", "Jane") // Set(Nancy, Jane)
+people += "Bob" // error: reassignment to val
+</code></p>
+
+<p>그러나 <code>val</code> 대신에 <code>var</code>로 선언하면, 불변 콜렉션이라고 해도  <code>+=</code> 연산자에 의해 갱신될 수 있다. 새 콜렉션이 생성되면, <code>people</code>은 새로운 콜렉션을 참조하기 위해 재할당된다.</p>
+
+<p><code>scala
+var people = Set("Nancy", "Jane") // Set(Nancy, Jane)
+people  += "Bob"
+people // Set(Nancy, Jane, Bob)
+</code></p>
+
+<p>이후 <code>people</code>변수는 추가된 문자열 &ldquo;Bob"을 포함하는 새로운 불변 set을 참조한다.</p>
+
+<p>동일한 방법을 <code>+=</code> 메소드가 아닌 <code>=</code>로 끝나는 모든 메소드에 적용할 수 있다. 다음은 set의 요소를 삭제하는 <code>-=</code> 연산자와 set에 콜렉션을 추가하는 <code>++=</code> 연산자를 사용한 같은 문법이다.</p>
+
+<p><code>scala
+people  -= "Jane"
+people ++= List("Tom", "Harry")
+people // Set(Nancy, Bob, Tom, Harry)
+</code></p>
+
+<p>얼마나 유용한 지 보기 위해, 1.1장의 Map 예제를 보자.</p>
+
+<p><code>scala
+var capital = Map("US" -&gt; "Washington", "France" -&gt; "Paris")
+capital += ("Japan" -&gt; "Tokyo")
+println(capital("France))
+</code></p>
+
+<p>이 코드는 불변 콜렉션을 사용한다. 가변 콜렉션을 사용하고 싶다면, <code>Map</code>의 가변 버전을 임포트하면 되는데, 이는 불변 <code>Map</code>의 기본 임포트를 오버라이딩한다.</p>
+
+<p><code>scala
+import scala.collection.mutable.Map // 이것만 바꾸면 됨.
+var capital = Map("US" -&gt; "Washington", "France" -&gt; "Paris")
+capital += ("Japan" -&gt; "Tokyo")
+println(capital("France"))
+</code></p>
+
+<p>그런데 이러한 문법적인 조치는 콜렉션이 아닌 모든 종류의 값에 동작한다. 예를 들면, 다음은 부동소수점 숫자에 사용하였다.</p>
+
+<p><code>scala
+var roughlyPi = 3.0 // Double 3.0
+roughlyPi += 0.1
+roughlyPi += 0.04
+roughlyPi // 3.14
+</code></p>
+
+<p>이 확장의 효과는 Java의 할당 연산자인 <code>+=</code>, <code>-=</code>, <code>*=</code>와 비슷하나 좀 더 제너럴한데, 왜냐하면 =로 끝나는 모든 연산자들이 변경될 수 있기 때문이다.</p>
+
+<h2>17.4 Initializing collections</h2>
+
+<p>컴패니언 객체(Companion Object) 이름 뒤의 중괄호안에 요소를 적으면, Scala 컴파일러는 이를 그 동료 객체에 <code>apply</code> 메소드를 호출하도록 변환한다. (※. 참고 <a href="http://daily-scala.blogspot.kr/2009/09/companion-object.html">Companion Object</a>)</p>
+
+<p>``` scala
+List(1, 2, 3)
+Set(&lsquo;a&rsquo;, &lsquo;b&rsquo;, &lsquo;c&rsquo;)</p>
+
+<p>import scala.collection.mutable
+mutable.Map(&ldquo;hi&rdquo; &ndash;> 2, &ldquo;there&rdquo; &ndash;> 5)</p>
+
+<p>Array(1.0, 2.0, 3.0)
+```</p>
+
+<p>대부분 Scala 컴파일러가 자신의 팩토리 메소드로 전달되는 요소로 콜렉션의 요소 타입을 추론하나, 콜렉션을 만든 후, 컴파일러가 선택하는 다른 타입을 기술하고 싶을 때도 있다.</p>
+
+<p>이는 가변 객체에 대해선 다음과 같은 이슈를 제기한다.</p>
+
+<p><code>scala
+import scala.collection.mutable
+val stuff = mutable.Set(42)
+stuff += "abracadabra" // error: type mismatch;
+</code></p>
+
+<p>여기서 문제는 <code>stuff</code>에 <code>Int</code> 타입이 주어진 것이다. <code>Any</code> 타입을 가지고 싶으면, 아래처럼 꺽쇠 괄호에 요소의 타입을 넣어줌으로써 명시적으로 말할 필요가 있다.</p>
+
+<p><code>scala
+val stuff = mutable.Set[Any](42)
+</code></p>
+
+<p>다른 특별한 경우는, 다른 콜렉션으로 콜력션을 초기화하고 싶을 경우이다. 예를 들면, 리스트가 있고 이 리스트의 요소를 지니는 <code>TreeSet</code>을 원할 경우이다.</p>
+
+<p><code>scala
+val colors = List("blue", "yellow", "red", "green")
+</code></p>
+
+<p><code>TreeSet</code>에 팩토리 메소드로 <code>colors</code> 리스트를 전달할 수 없다.</p>
+
+<p><code>scala
+import scala.collection.immutable.TreeSet
+val treeSet = TreeSet(colors) // error: cloud not find implicit value for parameter ord: Ordering[List[java.lang.String]]
+</code></p>
+
+<p>대신에, 빈 <code>TreeSet[String]</code>을 만들고 여기에 <code>TreeSet</code>의 <code>++</code> 연산자로 리스트 요소를 추가할 수 있다.</p>
+
+<p><code>scala
+val treeSet = TreeSet[String]() ++ colors
+</code></p>
+
+<h3>Converting to array or list</h3>
+
+<p>콜렉션으로 리스트나 배열을 초기화하는 것은 간단하다. 콜렉션의 <code>toList</code>나 <code>toArray</code>를 호출하면 된다.</p>
+
+<p>``` scala
+treeSet.toList // List(blue, green, red, yellow)</p>
+
+<p>treeSet.toArray // Array(blue, green, red, yellow)
+```</p>
+
+<p>원래 <code>colors</code> 리스트는 정렬되지 않았지만, <code>TreeSet</code>의 <code>toList</code>를 호출하여 생성된 리스트의 요소들은 알파벳 순서대로 정렬된다.</p>
+
+<p>콜렉션에 <code>toList</code>나 <code>toArray</code>를 호출하면 결과 리스트나 배열 요소의 순서는 콜렉션의 <code>elements</code>의 호출하여 얻어지는 반복자에 의해 생성된 요소의 순서와 동일하다. 왜냐하면 <code>TreeSet[String]</code>의 반복자가 알파벳 순서로 문자열들을 생성하기 때문이다.</p>
+
+<p>리스트나 배열로의 변환은  콜렉션의 모든 요소를 복사해야 하므로 큰 콜렉션에 대해서 느릴 수 있다는 것을 기억하자.</p>
+
+<h3>Converting between mutable and immutable sets and maps</h3>
+
+<p>가변 set과 map을 불변의 것으로 또는 그 엮으로 변경할 필요가 있다. 이를 위해 리스트의 요소를 <code>TreeSet</code>을 초기화하기 위해 이전의 테크닉을 사용할 수 있다.</p>
+
+<p><code>empty</code> 메소드를 사용해서 새로운 타입의 콜렉션을 생성하고, <code>++</code> 혹은 <code>++=</code>를 사용해서 타겟 콜렉션 타입에 대해 적절한 새로운 요소를 추가한다.</p>
+
+<p><code>scala
+import scala.collection.mutable
+treeSet // TreeSet(blue, green, red, yellow)
+val mutaSet = mutable.Set.empty ++= treeSet // Set(yellow, blue, red, green)
+val immutaSet = Set.empty ++ mutaSet // Set(yello, blue, red, green)
+</code></p>
+
+<p>가변과 불변 map에도 같은 변경 테크닉을 사용할 수 있다.</p>
+
+<p><code>scala
+val muta = mutable.Map("i" -&gt; 1, "ii" -&gt; 2)
+val immu = Map.empty ++ muta // Map(li -&gt; 2, i -&gt; 1)
+</code></p>
+
+<h2>17.5 Tuples</h2>
+
+<p>3.9장에 설명된 것처럼,  튜플은 고정된 개수의 아이템을 조합하여 전체를 싸잡아 전달할 수 있다. 다음은 정수, 문자열, 그리고 console을 가지는 튜플이다.</p>
+
+<p><code>scala
+(1, "hello", Console)
+</code></p>
+
+<p>단순하기 그지없는 육중한 데이터(data-heavy) 클래스를 정의하는 지루한 작업은 튜플로 피할 수 있다. 튜플은 클래스 이름을 고른다든지, 클래스가 정의될 범위를 고른다든지, 클래스 멤버의 이름을 고르는 노력을 덜어준다.</p>
+
+<p>다른 타입의 객체를 조합할 수 있기 때문에, 튜플은 <code>Traversable</code>을 상속하지 않는다. 하나의 정수와 정확히 하나의 문자열의 그룹을 만들 때는 <code>List</code>나 <code>Array</code>가 아닌 튜플이면 된다.</p>
+
+<p>튜플의 일반적인 응용은 메소드가 여러 개의 값들을 반환할 때이다. 예를 들면, 다음은 콜렉션에서 가장 긴 단어를 찾고 그 인덱스를 반환하는 메소드이다.</p>
+
+<p>``` scala
+def longestWord(words: Array[String]) = {</p>
+
+<pre><code>var word = words(0)
+var idx = 0
+for ( i &lt;- 1 until words.length)
+    if(words(i).length &gt; word.length) {
+        word = words(i)
+        idx = i
+    }
+(word, idx)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이 메소드는 다음과 같이 사용한다.</p>
+
+<p><code>scala
+val longest = longestWord("The quick brown forx".split(" ")) // (quick, 1)
+</code></p>
+
+<p><code>longestWord</code> 함수는 두 개의 아이템을 계산한다. 배열에서 가장 긴 단어인 <code>word</code>와 그 단어의 인덱스인 <code>idx</code>가  그것이다.</p>
+
+<p>문제를 단순화하기 위해 함수는 리스트에 적어도 하나의 단어가 있다고 가정하고 리스트에서 빨리 나오는 단어를 선택하는 방법으로 끈(tie)을 끊는다. 함수가 반환할 단어와 인덱스를 선택하면, 튜플 문법 <code>(word, idx)</code>를 사용해서 이들 모두를 함께 반환한다.</p>
+
+<p>튜플 요소에 억세스하기 위해 첫번째 요소는 <code>_1</code> 메소드로, 두번째 요소는 <code>_2</code> 메소드 등등을 사용한다.</p>
+
+<p><code>scala
+longest._1 // quick
+longest._2 // 1
+</code></p>
+
+<p>또한, 튜풀의 각 요소를 고유의 변수에 할당할 수 있다.</p>
+
+<p><code>scala
+val (word, idx) = longest
+word // quick
+</code></p>
+
+<p>그러나 괄호를 없애면 다른 결과를 얻게 된다.</p>
+
+<p><code>scala
+val word, idx = longest // word: (String, int) = (quick, 1) idx: (String, Int) = (quick, 1)
+</code></p>
+
+<p>이 문법은 같은 표현을 중복해서 정의한다. 각 변수는 오른쪽 표현식을 각각 평가하여 초기화된다. 두 변수 모두 완전한 형태로써 튜플에 대해 초기화된다.</p>
+
+<p>튜플은 &ldquo;A와 B&rdquo; 그 이상의 의미가 없는 데이터를 조합하는데 좋다. 그러나 조합이 어떤 의미를 가지게 되어 메소드가 추가될 때는 좀 더 나아가 클래스를 생성하는 것이 좋다. 예를 들면 년, 월, 일의 조합하는데 3개짜리 튜플을 사용하지 말고 사람과 컴파일러 모두 가독성과 실수를 잡기에 좋도록 좀 더 명확한 의도를 지닌 <code>Date</code> 클래스를 만들자.</p>
+
+<h2>17.6 Conclusion</h2>
+
+<p>Scala 콜렉션에 대해 좀 더 자세한 정보는 24장과 25장을 살펴보길 바란다. 이제부터 다음장에서는 Scala 라이브러리에서 돌아와 언어 (자체)에 주의를 집중하여 불변 객체에 대한 Scala의 지원을 논의할 것이다.</p>
+
+<h2>The Mores</h2>
+
+<ul>
+<li><a href="http://twitter.github.io/scala_school/collections.html">Twitter Scala School&rsquo;s Collections</a></li>
+<li><p><a href="http://www.scala-lang.org/docu/files/collections-api/collections.html">The Scala 2.8 Collections API</a></p></li>
+<li><p><a href="http://stackoverflow.com/questions/2712877/difference-between-array-and-list-in-scala">Difference between Array(buffer) and List(buffer) in scala</a></p></li>
+<li><p><a href="https://groups.google.com/d/msg/scala-korea/5PCCAS8wu8o/SMbcFzmTEy8J">라 스칼라 코딩단 Tail Recursion 논의</a></p></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 16장]]></title>
+    <link href="http://cluno.github.io/blog/2013/04/23/programming-in-scala-16-jang/"/>
+    <updated>2013-04-23T01:17:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/04/23/programming-in-scala-16-jang</id>
+    <content type="html"><![CDATA[<p>3주간 꾸역꾸역 16장 리스트를 정리해보았습니다. 정리를 해도 역시나 볼때마다 새롭네요. (&ndash;_&ndash;) 이하 편의상 음슴체로 갑니다.</p>
+
+<!-- more -->
+
+
+<h1>16 Working with Lists</h1>
+
+<h2>16.1 List literals</h2>
+
+<p>리스트 리터럴의 예</p>
+
+<!-- more -->
+
+
+<p>``` scala
+val fruit = List(&ldquo;apples&rdquo;, &ldquo;oranges&rdquo;, &ldquo;pears&rdquo;)
+val nums = List(1, 2, 3, 4)
+val diag3 = List(</p>
+
+<pre><code>List(1, 0, 0),  
+List(0, 1, 0),  
+List(0, 0, 1),  
+</code></pre>
+
+<p>) <br/>
+val empty = List()
+```</p>
+
+<p>리스트가 array와  다른 점 &ndash; 1) 리스트는 Immutable 함. 2) 재귀적 구조를 가질 수 있음. (예. Linked List)</p>
+
+<h2>16.2 The List type</h2>
+
+<p>리스트는 동질성을 띔, 모든 리스트의 요소들은 같은 타입임.</p>
+
+<p><code>List[T]</code> &ndash; 타입 T 요소를 가지는 리스트 타입.</p>
+
+<p>Scala에서 리스트 타입은 공변함(covariant) &ndash; 즉 <code>S</code>와 <code>T</code> 각 한 쌍의 타입에 대해, <code>S</code>가 <code>T</code>의 하위타입이면 <code>List[S]</code>도 <code>List[T]</code>의 하위타입이 됨. (예. <code>List[String]</code>은 <code>List[Object]</code>의 하위타입)</p>
+
+<p>빈 리스트 타입은 <code>List[Nothing]</code>. Scala에서 모든 타입 <code>T</code>에 대해 <code>List[Nothing]</code>은  <code>List[T]</code>의 하위 타입. 따라서, 다음과 같은 코드도 허용됨.</p>
+
+<p><code>scala
+val xs: List[String] = List()
+</code></p>
+
+<h2>16.3 Constructing lists</h2>
+
+<p>모든 리스트는 <code>Nil</code>과 <code>::</code>(cons라 발음)의 빌딩 블럭으로 만들 수 있음. <code>Nil</code>은 공백 리스트. 중위표기 연산자(infix operator)인 <code>::</code>는 전방에서 리스트를 확장함.</p>
+
+<p><code>x::xs</code> &ndash; 첫째 요소가 <code>x</code>이고 이어지는 요소가 <code>xs</code>인 리스트</p>
+
+<p>따라서, 이전 리스트는 다음과 같이 정의될 수 있음.</p>
+
+<p>``` scala
+val fruit = &ldquo;apples&rdquo; :: (&ldquo;oranges&rdquo; :: (&ldquo;pears&rdquo; :: Nil))
+val nums  = 1 :: (2 :: (3 :: (4 :: Nil)))
+val diag3 = (1 :: (0 :: (0 :: Nil))) ::</p>
+
+<pre><code>(0 :: (1 :: (0 :: Nil))) ::
+(0 :: (0 :: (1 :: Nil))) :: Nil
+</code></pre>
+
+<p>val empty = Nil
+```</p>
+
+<h2>16. 4 Basic operations on lists</h2>
+
+<p>리스트 연산은 다음의 3가지 용어로 설명될 수 있음.</p>
+
+<ul>
+<li>head &ndash; 리스트의 첫째 요소를 반환</li>
+<li>tail &ndash; 첫째를 제외한 모든 요소들의 리스트를 반환</li>
+<li>isEmpty &ndash; 비어있는 리스트인 경우 true를 반환</li>
+</ul>
+
+
+<p>이런 연산은 <code>List</code>클래스의 메소드로 정의되어 있음 (이상 <a href="http://www.scala-lang.org/api/current/index.html#scala.collection.immutable.List">API</a> 참조). 몇 가지 예는 아래와 같음.</p>
+
+<pre><code>empty.isEmpty       returns true
+fruit.isEmtpy       returns false 
+fruit.head          returns "apples"
+fruit.tail.head     returns "apples"
+diag3.head          returns List(1,0,0)
+</code></pre>
+
+<p><code>head</code>와 <code>tail</code> 메소드는 빈 리스트가 아닌 경우에만 정의됨.</p>
+
+<pre><code>Nil.head    // java.util.NoSuchElementException: head of empty list
+</code></pre>
+
+<p>리스트가 어떻게 처리될 수 있는지에 대한 예제로 리스트 요소들을 오름차순으로 정렬해 봄.</p>
+
+<p>가장 간단한 방법은 삽입 정렬(insertion sort)임.</p>
+
+<p>삽입 정렬 &ndash; <code>x::xs</code> 리스트를 정렬하기 위해, 나머지 <code>xs</code>를 정렬하고, 첫째 요소 <code>x</code>를 결과의 오른쪽 위치에 삽입하는 방법. 빈 리스트 정렬할 경우는 빈 리스트를 얻게 됨.</p>
+
+<p>``` scala
+def isort(xs: List[Int]): List[Int] =</p>
+
+<pre><code>if (xs.isEmpty) Nil
+else insert(xs.head, isort(xs.tail))
+</code></pre>
+
+<p>def insert(x: Int, xs: List[Int]): List[Int] =</p>
+
+<pre><code>if (xs.isEmpty || x &lt;= xs.head) x :: xs
+else xs.head :: insert(x, xs.tail)
+</code></pre>
+
+<p>```</p>
+
+<h2>16.5 List patterns</h2>
+
+<p>패턴 매칭을 사용해 리스트를 분리할 수 있음.</p>
+
+<p><code>scala
+val List(a, b, c) = fruit
+// a: String = apples
+// b: String = oranges
+// c: String = pears
+</code></p>
+
+<p>리스트의 길이를 모를 경우에는 <code>::</code>를 사용해서 매칭 &ndash;  <code>a :: b :: rest</code> (a와 b 그리고 2개 이상의 리스트는  <code>rest</code>로 매칭)</p>
+
+<p><code>scala
+val a :: b :: rest = fruit
+// a: String = apples
+// b: String = oranges
+// rest: List[String] = List(pears)
+</code></p>
+
+<h4>List 패턴 매칭에 대해</h4>
+
+<blockquote><p><code>List(…)</code> 이나 <code>::</code> 도 패턴임. <code>List(…)</code>는 라이브러리에 정의된 extractor 패턴의 인스턴스임 (26장에서 설명). cons 패턴인 <code>x::xs</code>은 중위 연산 (infix operation) 패턴의 특이한 경우임.  중위 연산도 메소드 호출과 동일함. <code>p op q</code> 는 <code>op(p, q)</code>와 같은데, 생성자 패턴처럼 다뤄지는 거임. <code>x::xs</code>는 <code>::(x, xs)</code>처럼 다룸. 즉 <code>::</code>라는 이름의 클래스가 있다는 것을 알 수 있음. 실제 빈 리스트를 만드는 <code>scala.::</code>라는 이름을 지닌 클래스가 있음. Scala에서 <code>::</code>가 두 개 존재함 &ndash; 하나는 scala 패키지 내에 클래스로 있고, 또 하나는 List 클래스 내에 메소드로 있음. 이상, 22장에서 List 클래스가 어떻게 구현되었는지를 살펴볼 것임.</p></blockquote>
+
+<p>패턴 매칭으로 기본 메소드로(<code>head</code>, <code>tail</code> 그리고 <code>isEmpty</code> 등)로 작성된 코드를 대체할 수 있음.</p>
+
+<p>``` scala
+def isort(xs: List[Int]): List[Int] = xs match {</p>
+
+<pre><code>case List() =&gt; List()
+case x :: xs1 =&gt; insert(x, isort(xs1))
+</code></pre>
+
+<p>}</p>
+
+<p>def insert(x: Int, xs: List[Int]): List[Int] = xs match {</p>
+
+<pre><code>case List() =&gt; List(x)
+case y :: ys =&gt; if (x &lt;= y) x :: xs 
+    else y :: insert(x, ys)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위와 같이 패턴 매칭으로 좀 더 간결하고 분명한 코드를 작성할 수 있음.</p>
+
+<h2>16.6 First-order methods on class List</h2>
+
+<p>리스트 클래스의 일차 메소드에 대해 설명하겠음.</p>
+
+<p>일차(first-order)라는 것은 어떤 함수도 인자로 취하지 않는다는 것을 말함.</p>
+
+<h3>Concatenating two lists</h3>
+
+<p><code>:::</code>로 두 개의 리스트 연결함. <code>xs ::: ys</code>는 <code>xs</code> 다음에 <code>ys</code>가 오는 새 리스트를 만듦.</p>
+
+<p><code>scala
+List(1, 2) ::: List(3, 4, 5)    // List(1, 2, 3, 4, 5)
+List() ::: List(1, 2, 3)        // List(1, 2, 3)
+List(1, 2, 3) ::: List(4)       // List(1, 2, 3, 4)
+</code></p>
+
+<p><code>xs ::: ys ::: zs</code>는 <code>xs ::: (ys :::zs)</code>로 해석됨.</p>
+
+<h3>The Divide and Conquer principle</h3>
+
+<p>Concatenation(:::)은 직접 구현할 수도 있음. <code>append</code>라고 부르고 리스트 클래스 외부에 정의해 보겠음. 연결할 두 개의 리스트를 매개변수로 받아야 하고 리스트는 임의의 요소를 지님. 따라서, 다음과 같음.</p>
+
+<p><code>scala
+def append[T](xs: List[T], ys: List[T]): List[T]
+</code></p>
+
+<p><code>append</code>를 구현하기 위해 리스트와 같은 재귀적 데이터 구조를 이용하는 프로그램의 설계원리인 &ldquo;분할정복(divide and conquer)"을 기억해보는 것이 좋음.</p>
+
+<h4>Divide and conquer (분할 정복)</h4>
+
+<blockquote><p>리스트에 대한 대부분의 알고리즘은 먼저 입력 리스트를 패턴 매칭을 사용해 단순한 <code>case</code>들로 쪼개며, 이를 분할(divide)이라고 함. 그리고 각 <code>case</code>에 대한 결과를 구성함. 결과가 빈 리스트가 아닐 경우, 어떤 부분은 같은 알고리즘의 재귀적 호출로 인해 구성하는데, 이를 정복(conquer)이라고 함.</p></blockquote>
+
+<p>구현할 <code>append</code> 메소드에 이 원리를 적용하기 위해, 매치할 리스트를 결정해야 함. 경우의 수가 2가지 뿐이므로 단순한 편임.</p>
+
+<p>정복 단계에서는 두 입력 리스트의 모든 요소들로 이루어지는 리스트를 만들어야 함.</p>
+
+<p>리스트는 뒤에서 앞쪽으로 만들어지므로, <code>ys</code>는 그대로 남겨두지만 <code>xs</code>는 분해되어 <code>ys</code>에 앞에 삽입될 필요가 있음. 따라서,<code>xs</code>가  패턴매칭의 집중 대상이 됨.</p>
+
+<p>리스트에서 가장 흔한 패턴 매칭은 비어 있지 않은 리스트로부터 빈 리스트를 구별해내는 것임.</p>
+
+<p>이상, <code>append</code> 메소드는 다음과 같은 형식임.</p>
+
+<p>``` scala
+def append<a href="xs:%20List[T],%20ys:%20List[T]">T</a>: List[T] =</p>
+
+<pre><code>xs match {
+    case List() =&gt; // ??
+    case x :: xs1 =&gt; // ??
+}
+</code></pre>
+
+<p>```</p>
+
+<p>??을 채우기 위해, 먼저 <code>xs</code>가 빈 리스트인 경우, 연결 결과로 두 번째 리스트를 넘겨주게 됨.</p>
+
+<p>``` scala</p>
+
+<pre><code>case List() =&gt; ys
+</code></pre>
+
+<p>```</p>
+
+<p>다음으로 머리 <code>x</code> 와 꼬리 <code>xs1</code>로 이뤄지는 입력 리스트 <code>xs</code>가 오는 경우, 결과 역시 비어있지 않은 리스트임.</p>
+
+<p>비어있지 않은 리스트를 구성하기 위해서는 리스트의 머리와 꼬리가 무엇인지 알아야 함. 머리는 <code>x</code>라는 걸 이미 알고 있고, 꼬리는 첫 번째 리스트의 나머지 <code>xs1</code>와 두 번째 리스트인 <code>ys</code>로 구성됨.</p>
+
+<p>따라서 ?? 구현이 완료된 모습은 다음과 같음.</p>
+
+<p>``` scala
+def append<a href="xs:%20List[T],%20ys:%20List[T]">T</a>: List[T] =</p>
+
+<pre><code>xs match {
+    case List() =&gt; ys
+    case x :: xs1 =&gt; x :: append(xs1, ys)
+}
+</code></pre>
+
+<p>```</p>
+
+<h3>Taking the length of a list: length</h3>
+
+<p>length는 리스트의 길이는 계산함.</p>
+
+<p><code>scala
+List(1, 2, 3).length    // 3
+</code></p>
+
+<h3>Accessing the end of a list: init and last</h3>
+
+<p><code>last</code>는 리스트의 마지막 요소를 반환, <code>init</code>은 리스트의 첫째 요소를 반환.</p>
+
+<p><code>scala
+val abcde = List('a', 'b', 'c', 'd', 'e')
+abcde.last      // e
+abcde.init      // List(a, b, c, d)
+</code></p>
+
+<p><code>head</code>와 <code>tail</code>처럼 빈 리스트는 <code>init</code>과 <code>last</code> 메소드가 없음.</p>
+
+<p><code>scala
+List().init     // java.lang.UnsupportedOperationException
+List().last     // java.util.NoSuchElementException
+</code></p>
+
+<p>일정한 시간(constant time)에서 실행되는 <code>head</code>와 <code>tail</code>과 달리 <code>init</code>과 <code>last</code>는 결과를 계산하기 위해 전체 리스트를 횡단함. 가급적 마지막 요소보다는 리스트의 머리를 사용해서 데이터를 조직하는 것이 좋음.</p>
+
+<h3>Reversing lists: reverse</h3>
+
+<p>리스트의 마지막을 자주 억세스하는 알고리즘의 경우, 리스트를 뒤집어 그 결과로 작업하는 것이 좋음.</p>
+
+<p><code>scala
+abcde.reverse   // List(e, d, c, b, a)
+</code></p>
+
+<p><code>reverse</code> 메소드는 새 리스트는 반환함. 리스트는 불변성을 띠기 때문에 원본 데이터는 변하지 않음</p>
+
+<p>``` scala</p>
+
+<pre><code>abcde           // List(a, b, c, d, e)
+</code></pre>
+
+<p>```</p>
+
+<p><code>reverse</code>, <code>init</code>, <code>last</code> 연산은 추론 가능한 몇가지 계산 법칙을 만족함.</p>
+
+<p>1) <code>reverse</code>는 자신의 반전임.</p>
+
+<pre><code>xs.reverse.reverse equals  xs
+</code></pre>
+
+<p>2) <code>reverse</code>는 <code>init</code>은 <code>tail</code>로 <code>last</code>는 <code>head</code>로 돌림. (반전된 요소는 예외)</p>
+
+<pre><code>xs.reverse.init equals xs.tail.reverse
+xs.reverse.tail equals xs.init.reverse
+xs.reverse.head equals xs.last
+xs.reverse.last equals xs.head
+</code></pre>
+
+<p>반전은 concatenation(<code>:::</code>)으로 구현될 수 있음.</p>
+
+<p>``` scala
+def rev<a href="xs:%20List[T]">T</a>: List[T] = xs match {</p>
+
+<pre><code>case List() =&gt; xs
+case x :: xs1 =&gt; rev(xs1) ::: List(x)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위 메소드는 효율이 좋지 못함. <code>rev</code>의 복잡도는 리스트 <code>xs</code>가 길이 n을 가질 때, n번의 rev에 대한 재귀호출이 있으므로 복잡도는 다음과 같음.</p>
+
+<pre><code>n + (n - 1) + … + 1 = (1 + n) * n / 2
+</code></pre>
+
+<p>즉, <code>rev</code>의 복잡도는 입력 인자의 길이 n을 가지는 2차 방정식임. 선형 복잡도를 지니는 <code>reverse</code> 메소드에 비해 속도가 떨어짐. 섹션4에서 속도를 높이는 방법을 볼 것임.</p>
+
+<h3>Prefixes and suffixes: drop, take, and splitAt</h3>
+
+<p><code>drop</code>과 <code>take</code>는 리스트의 prefix나 혹은 suffix를 반환하는<code>tail</code>과 <code>init</code>의 일반적인 형태임.</p>
+
+<p><code>xs take n</code> &ndash; 리스트 xs의 처음 n개의 요소를 반환. n이 리스트 xs의 길이보다 클 경우, 전체 리스트 xs를 반환</p>
+
+<p><code>xs drop n</code> &ndash; 리스트 xs의 처음 n개를 제외한 리스트 요소들을 반환. n이 리스트 xs의 길이보다 작을 경우, 빈 리스트를 반환</p>
+
+<p><code>splitAt</code> &ndash; 주어진 인덱스에서 리스트를 분할, 두 개의 리스트 쌍을 반환. 그러나 리스트를 두 번 횡단하지는 않음</p>
+
+<p>``` scala</p>
+
+<pre><code>xs splitAt n    equals  (xs take n, xs drop n)
+</code></pre>
+
+<p>```</p>
+
+<p>예제</p>
+
+<p><code>scala
+abcde   take 2      // List(a, b)
+abcde   drop 2      // List(c, d, e)
+abcde   splitAt 2   // (List(a, b), List(c, d, e))
+</code></p>
+
+<h3>Element selection: apply and incides</h3>
+
+<p><code>apply</code> &ndash; 랜덤 요소 선택, array가 아닌 리스트에서는 흔하지 않은 연산.</p>
+
+<p><code>scala
+abcde apply 2   // c
+</code></p>
+
+<p>메소드를 호출할 때 함수 위치에 객체가 나타나는 경우, <code>apply</code> 메소드가 암묵적으로 삽입됨.</p>
+
+<p><code>scala
+abcde(2)        // c
+</code></p>
+
+<p><code>xs(n)</code>은 인덱스 n에 대해 시간에 비례. <code>apply</code>는 <code>drop</code>과 <code>head</code>의 조합으로 정의됨.</p>
+
+<p><code>scala
+xs apply n equals (xs drop n).head
+</code></p>
+
+<p><code>indices</code> &ndash; 주어진 리스트의 모든 유효한 인덱스들로 구성된 리스트를 반환함.</p>
+
+<p><code>scala
+abcde.indices   // Range(0, 1, 2, 3, 4)
+</code></p>
+
+<h3>Flattening a list of lists: flatten</h3>
+
+<p><code>flatten</code> &ndash; 리스트의 리스트를 하나로 합침.</p>
+
+<p><code>scala
+List(List(1, 2), List(3), List(), List(4, 5)).flatten   // List(1, 2, 3, 4, 5)
+fruit.map(_.toCharArray).flatten     // List(a, p, p, l, e, s, o, r, a, n, g, e, s, p, e, a, r, s)
+</code></p>
+
+<h3>Zipping lists: zip and unzip</h3>
+
+<p><code>zip</code> &ndash; 두 개의 리스트를 취해 한 쌍의 리스트로 구성함.</p>
+
+<p><code>scala
+abcde.indices zip abcde // IndexedSeq((0, a), (1, b), (2, c), (3, d), (4, e))
+</code></p>
+
+<p>길이가 다를 경우, 맞지 않는 것은 드랍됨.</p>
+
+<p><code>scala
+val zipped = abcde zip List(1, 2, 3) // List((a, 1), (b, 2), (c, 3))
+</code></p>
+
+<p><code>zipWithIndex</code> &ndash; 리스트를 그 인덱스와 zip함</p>
+
+<p><code>scala
+abcde.zipWithIndex // List((a, 0), (b, 1), (c, 2), (d, 3), (e, 4))
+</code></p>
+
+<p>튜플의 리스트도 리스트의 튜플로 역변환할 수 있음.</p>
+
+<p><code>scala
+zipped.unzip // (List(a, b, c), List(1, 2, 3))
+</code></p>
+
+<h3>Displaying lists: toString and mkString</h3>
+
+<p><code>toString</code> &ndash; 리스트의 canonical 문자열 표현</p>
+
+<p><code>xs mkString(pre, sep, post)</code> &ndash; 4개의 오퍼랜드를 취함</p>
+
+<pre><code>pre + xs(0) + sep + … + sep + xs(xs.length -1) + post
+</code></pre>
+
+<p><code>mkString</code> 메소드는 두 개의 오버로드된 형식이 있음.</p>
+
+<p>첫 번째는 구분자 문자열만 취함</p>
+
+<p><code>scala
+xs mkString seq equals xs mkString("", sep", "")
+</code></p>
+
+<p>두 번째는 모든 인자가 생략됨.</p>
+
+<p><code>scala
+xs.mkString equals xs mkString ""
+</code></p>
+
+<p>기타 몇 가지 예제</p>
+
+<p><code>scala
+abcde mkString ("[", ",", "]")          // String = [a, b, c, d, e]
+abcde mkString ""                       // String = abcde
+abcde mkString                          // String = abcde
+abcde mkString ("List(", ", ", ")")     // String = List(a, b, c, d, e)
+</code></p>
+
+<p><code>addString</code> &ndash; StringBuilder  객체에 구조화된 문자열을 추가하는 메소드. Java의 StringBuilder가 아님.</p>
+
+<p><code>scala
+val buf = new StringBuilder
+abcde addString(buf, "(", ";", ")")     // StringBuilder = (a;b;c;d;e)
+</code></p>
+
+<h3>Converting lists: iterator, toArray, copyToArray</h3>
+
+<p><code>toArray</code> &ndash; 리스트 데이터를 array 데이터로 변경, <code>toList</code> &ndash; array 데이터를 리스트 데이터로 변경</p>
+
+<p><code>scala
+val arr = abcde.toArray // Array(a, b, c, d, e)
+arr.toList               // List(a, b, c, d, e)
+</code></p>
+
+<p><code>copyToArray</code> &ndash; start 위치부터 array에 리스트 데이터를 복사. 북사 대상 array는 원본 리스트 만큼 충분히 커야함.</p>
+
+<p><code>scala
+val arr2 = new Array[Int](10)       // Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+List(1, 2, 3) copyToArray (arr2, 3)  // Array(0, 0, 0, 1, 2, 3, 0, 0, 0, 0)
+</code>
+<code>iterator</code> &ndash; 반복자를 이용해 리스트 요소에 억세스함.</p>
+
+<p><code>scala
+val it = abcde.iterator
+it.next         // a
+it.next         // b
+</code></p>
+
+<h3>Example: Merge sort</h3>
+
+<p>이상, 예제로 병할 정렬을 구현해보겠음. 병합 정렬 알고리즘은 다음과 같음</p>
+
+<ul>
+<li>리스트가 0개 혹은 1개의 요소를 가지고 있으면 이미 정렬된 거임.</li>
+<li>그 이상일 경우, 두 개의 하위 리스트로 분할함.</li>
+<li>각각의 하위 리스트는 sort 함수의 재귀호출에 의해 정렬되어 두 개의 정렬된 리스트를 병합(merge) 연산으로 합침.</li>
+</ul>
+
+
+<p>구현을 일반화시키기 위해 리스트의 타입과 각 요소들을 비교하는 함수는 오픈된 상태로 남겨둠. 궁극의 일반화(Generalization)를 위해 이 두 항목은 매개변수로 전달하는 거임.</p>
+
+<p>``` scala
+def msort<a href="less:%20(T,%20T">T</a> => Boolean) (xs: List[T]): List[T] = {</p>
+
+<pre><code>def merge(xs: List[T], ys: List[T]): List[T] = (xs, ys) match {
+    case (Nil, _) =&gt; ys
+    case (_, Nil) =&gt; xs
+    case (x :: xs1, y :: ys1) =&gt;
+        if(less(x, y) x :: merge(xs1, ys)
+            else y :: merge(xs, ys1)
+}
+
+val n = xs.length / 2
+if (n == 0) xs
+else {
+    val (ys, zs) = xs splitAt n
+    merge(msort(less)(ys), msort(less)(zs))
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>n이 입력 리스트의 길이일 때, msort의 복잡도는 <em>O(nlog(n))</em> 임. (※. 일반적인 병합 정렬의 복잡도임. 이하 자세한 설명은 p. 320을 참고 혹은 알고리즘 관련 도서를 참고 바람.)</p>
+
+<p>사용 예)</p>
+
+<p><code>scala
+msort((x: Int, y: Int) =&gt; x &lt; y)(List(5, 7, 1, 3)) // List(1, 3, 5, 7)
+</code></p>
+
+<p>섹션 9.3의 currying을 적용해서 정수형을 정렬하는 함수</p>
+
+<p><code>scala
+val intSort = msort((x: Int, y: Int) =&gt; x &lt; y) _
+</code></p>
+
+<p>정수형을 역순으로 정렬하는 함수</p>
+
+<p><code>scala
+val reverseIntSort = msort((x: Int, y: Int) =&gt; x &gt; y) _
+</code></p>
+
+<p>이상 위의 함수들을 이용한 예제</p>
+
+<p><code>scala
+val mixedInts = List(4, 1, 9, 0, 5, 8, 3, 6, 2, 7)
+intSort(mixedInts)
+reverseIntSort(mixedInts)
+</code></p>
+
+<h2>16.7 Higher-order methods on class List</h2>
+
+<p>고차함수란 다른 함수를 매개변수로 취하는 함수를 말하는데, 이런 고차 연산자를 이용한 List 클래스의 메소드들을 살펴보겠음.</p>
+
+<h3>Mapping over lists:  map, flatMap and foreach</h3>
+
+<p><code>xs map f</code> &ndash; <code>List[T]</code> 타입의 <code>xs</code> 리스트와 <code>T =&gt; U</code> 타입의 함수 <code>f</code>를 오퍼랜드로 취함. <code>xs</code>의 각 리스트 요소에 함수 <code>f</code>를 적용한 리스트를 반환함.</p>
+
+<p>``` scala
+List(1, 2, 3) map (_ + 1)                           // List(2, 3, 4)</p>
+
+<p>val words = List(&ldquo;the&rdquo;, &ldquo;quick&rdquo;, &ldquo;brown&rdquo;, &ldquo;fox&rdquo;)
+words map (<em>.length)                                // List(3, 5, 5, 3)
+words map (</em>.toList.reverse.mkString)               // List(eht, kciuq, nworb, xof)
+```</p>
+
+<p><code>flatMap</code> &ndash; <code>map</code>과 비슷. 오른쪽 오퍼랜드로 요소의 리스트를 반환하는 함수를 취함. 모든 함수를 적용한 결과를 단일 리스트로 취합함.</p>
+
+<p>``` scala
+words map (_.toList)
+// List(List(t, h, e), List(q, u, i, c, k), List(b, r, o, w, n), List(f, o, x))</p>
+
+<p>words flatMap (_.toList)
+// List(t, h, e, q, u, i, c, k, b, r, o, w, n, f, o, x)
+```</p>
+
+<p>1 &lt;= j &lt; i &lt; 5인 모든  짝(i, j)의 리스트를 구성하는 예제</p>
+
+<p>``` scala
+List.range(1, 5) flatMap (</p>
+
+<pre><code>i =&gt; List.range(1, i) map (j =&gt; (i, j))
+</code></pre>
+
+<p>)</p>
+
+<p>// List((2, 1), (3, 1), (3, 2), (4, 1), (4, 2), (4, 3))
+```</p>
+
+<p><code>for</code>문을 사용한 같은 예제</p>
+
+<p><code>scala
+for (i &lt;- List.range(1, 5); j &lt;- List.range(1, i)) yield (i, j)
+</code></p>
+
+<p><code>foreach</code>가 <code>map</code>과 <code>flatMap</code>과 비슷하나 다른 점은 결과의 리스트를 모으는 것이 아니라 Unit 타입의 결과만 리턴함.</p>
+
+<p><code>scala
+var sum = 0
+List(1, 2, 3, 4, 5) foreach (sum += _)  // 15
+</code></p>
+
+<h3>Filtering lists: filter, partition, find, takeWhile, dropWhile, and span</h3>
+
+<p><code>xs filter p</code> &ndash; <code>List[T]</code> 타입의 <code>xs</code> 리스트와 <code>T =&gt; Boolean</code> 타입의 함수 <code>p</code>를 오퍼랜드로 취하고 p(x)가 참인 <code>xs</code>의 모든 요소 <code>x</code>를 반환함.</p>
+
+<p>``` scala
+List(1, 2, 3, 4, 5) filter (_ % 2 == 0)     // List(2, 4)</p>
+
+<p>words filter (_.length == 3)                // List(the, fox)
+```</p>
+
+<p><code>partition</code> 메소드는 <code>filter</code>와 비슷하나 리스트의 쌍을 반환함. 하나는 참, 하나는 거짓인 요소의구성된 각각의 리스트를 반환</p>
+
+<p><code>scala
+List(1, 2, 3, 4, 5) partition (_ % 2 == 0)  // (List(2, 4), List(1, 3, 5))
+</code></p>
+
+<p><code>find</code> 역시 filter와 비슷하나 주어진 술어(predicate)를 만족하는 첫째 요소를 반환</p>
+
+<p><code>scala
+List(1, 2, 3, 4, 5) find ( _ % 2 == 0)  // Some(2)
+List(1, 2, 3, 4, 5) find (_ &lt;= 0)       // None
+</code></p>
+
+<p><code>xs takeWhile p</code> &ndash; p를 만족하는 모든 요소로 구성된 리스트 xs에서 가장 긴 prefix를 취함
+<code>xs dropWhile p</code> &ndash; p를 만족하는 모든 요소로 구성된 리스트 xs에서 가장 긴 prefix를 버림</p>
+
+<p><code>scala
+List(1, 2, 3, 4, -4, 5) takeWhile (_ &gt; 0)   // List(1, 2, 3)
+words dropWhile(_ startWith "t")            // List(quick, brown, fox)
+</code></p>
+
+<p><code>span</code> &ndash; <code>takeWhile</code>과 <code>dropWhile</code>을 하나로 합침, 그러나 리스트를 두 번 횡단하지 않음.</p>
+
+<p><code>scala
+xs span p equals (xs takeWhile p, xs dropWhile p)
+</code></p>
+
+<p>예제</p>
+
+<p><code>scala
+List(1, 2, 3, -4, 5) span (_ &gt; 0)   // (List(1, 2, 3), List(-4, 5))
+</code></p>
+
+<h3>Predicates over lists: forall and exists</h3>
+
+<p><code>xs forall p</code> &ndash; p를 만족하는 모든 요소를 반환
+<code>xs exists p</code> &ndash; p를 만족하는 요소가 있으면 <code>true</code>를 반환</p>
+
+<p>``` scala
+def hasZeroRow(m: List[List[Int[) = m exists (row => row forall (_ == 0))</p>
+
+<p>hasZeroRow(dia3)    // false
+```</p>
+
+<h3>Folding lists: /: and :\</h3>
+
+<p>아래의 더하기는</p>
+
+<pre><code>sum(List(a, b, c)) equals 0 + a + b + c
+</code></pre>
+
+<p>사실 다음과 같은 <code>fold</code> 연산의 인스턴스임.</p>
+
+<p><code>scala
+def sum(xs: List[Int]): Int = (0 /: xs)(_ + _)
+</code></p>
+
+<p>아래의 곱하기도</p>
+
+<pre><code>product(List(a, b, c)) equals 1 * a * b * c
+</code></pre>
+
+<p>다음과 같은 <code>fold</code> 연산의 인스턴스임.</p>
+
+<p><code>scala
+def product(xs: List[Int]): Int = (1 /: xs) (_ * _)
+</code></p>
+
+<p><code>:\</code> (<em>fold left</em> 라고 발음) 연산은 3개의 오퍼랜드를 취함. 시작값 <code>z</code>, 리스트 <code>xs</code>, 이항 연산 <code>op</code>. fold의 결과는 <code>z</code>가 부가된 리스트의 연속적인 요소 사이에 <code>op</code>가 적용됨.</p>
+
+<p><code>scala
+(z :/ List(a, b, c))(op) equals op(op(op(z, a), b, c)
+</code></p>
+
+<p>다른 예</p>
+
+<p><code>scala
+("" /: words) (_ +" "+ _)   //   java.lang.String =  the quick brown fox
+</code></p>
+
+<p>공백을 제거하려면</p>
+
+<p><code>scala
+(words.head /: words.tail)  (_ +" "+_)  // java.lang.String = the quick brown
+</code></p>
+
+<p><code>:\</code>(<em>fold right</em> 라고 발음) 연산은 오른쪽으로 기울어진 트리를 만듦.</p>
+
+<p><code>scala
+(List(a, b, c) :\ z)(op) equals op(a, op(b, op(c, z)))
+</code></p>
+
+<p>서로 관련된 동작의 경우, fold left와 fold right가 결과는 같지만 효율은 다를 수 있음. 예를 들어 flatten 연산은 fold left나 혹은 fold right로 다음과 같이 구현됨.</p>
+
+<p>``` scala
+def flattenLeft<a href="xss:%20List[List[T]]">T</a> = (List[T])() /: xss)(<em> ::: </em>)</p>
+
+<p>def flattenRight<a href="xss:%20List[List[T]">T</a> = (xss :\ List<a href="">T</a>)(<em> :: </em>)
+```</p>
+
+<p>리스트 연결 <code>xs ::: ys</code>가 첫째 인자 xs에 대해 시간이 비례하기 때문에, <code>flattenRight</code>가 보다 효율적임. <code>flattenLeft</code>의 문제점은 n은 리스트 <code>xss</code>의 길이일 때, <code>flattenLeft(xss)</code>가 <code>xss</code>의 첫째 요소 <code>xss.head</code>를 n-1번 복사하고 있다는 것임. (※. 관련된 Stackoverflow 질문 <a href="http://stackoverflow.com/questions/10475493/performance-consideration-between-and-operators-in-scala">Performance consideration between /: and :\ operators in Scala</a>)</p>
+
+<p>Scala 타입 추론의 제한으로 인해, 타입 주석을 생략할 경우 오류가 발생함.</p>
+
+<p><code>scala
+def flattenRight[T](xss: List[List[T]]) = (xss :\ List())(_ ::: _)
+</code></p>
+
+<p><code>/:</code>, <code>:\</code>가 직관적이지 않아 보일 경우, <code>List</code>에 정의된 <code>foldLeft</code>와 <code>foldRight</code>를 사용해도 무방함.</p>
+
+<h3>Example: List reversal using fold</h3>
+
+<p>선형적 효율을 보이는 reverse 메소드의 구현</p>
+
+<p><code>scala
+def reverseLeft[T](xs: List[T]) = (List[T]() /: xs){ (ys, y) =&gt; y :: ys }
+</code></p>
+
+<h3>Sorting lists: sortWith</h3>
+
+<p><code>xs sortWith before</code>&ndash; 두 개의 요소를 비교하는 <code>before</code> 함수에 의해 리스트 xs의 요소를 정렬</p>
+
+<p><code>scala
+List(1, -3, 4, 2, 6) sortWith (_ &lt; _)   // List(-3, 1, 2, 4, 6)
+words sortWith (_.length &gt; _.length)    // List(quick, brown, the, fox)
+</code></p>
+
+<h2>16.8 Methods of list object</h2>
+
+<h3>Creating lists from their elements: List.apply</h3>
+
+<p>리스트 <code>List(1, 2, 3)</code>은 <code>List.apply(1, 2, 3)</code>과 같음 &ndash; 요소 1, 2, 3 에 대해서 <code>List</code>의 <code>apply</code>를 호출</p>
+
+<p><code>scala
+List.apply(1, 2, 3)     // List(1, 2, 3)
+</code></p>
+
+<h3>Creating a range of numbers: List.range</h3>
+
+<p><code>List.range(from, until)</code> &ndash; 리스트의 from 에서 시작해서 until까지의 모든 수로 된 새 리스트를 작성. 마지막 until의 요소는 포함되지 않음. 세 번째 매개변수로 <code>step</code>이 있음</p>
+
+<p><code>scala
+List.range(1, 5)        // List(1, 2, 3, 4)
+List.range(1, 9, 2)     // List(1, 3, 5, 7)
+List.range(9, 1, -3)    // List(9, 6, 3)
+</code></p>
+
+<h3>Creating uniform lists: List.fill</h3>
+
+<p><code>fill</code> &ndash; 0 또는 그 이상의 같은 요소로 구성된 리스트를 생성. 매개변수는 2개 &ndash; 생성할 리스트의 길이와 반복될 요소</p>
+
+<p><code>scala
+List.fill(5)('a')           // List(a, a, a, a, a)
+List.fill(3)("hello")       // List(hello, hello, hello)
+</code></p>
+
+<p>2개 이상의 매개변수를 넘기면 다차원 리스트를 구성함</p>
+
+<p><code>scala
+List.fill(2, 3)('b')        // List(List(b, b, b), List(b, b, b))
+</code></p>
+
+<h3>Tabulating a function: List.tabulate</h3>
+
+<p><code>tabulate</code> &ndash; 요소들이 주어진 함수에 의해 계산되는 리스트를 생성. <code>List.fill</code>과 동일한 매개변수를 취함.</p>
+
+<p><code>scala
+val squares = List.tabulate(5)(n =&gt; n * n)  // List(0, 1, 4, 9, 16)
+val multiplication = List.tabulate(5, 5)(_ * _) // List(List(0, 0, 0, 0, 0), List(0, 1, 2, 3, 4), List(0, 2, 4, 6, 8), List(0, 3, 6, 9, 12), List(0, 4, 8, 12, 16))
+</code></p>
+
+<h3>Concatenating multiple lists: List.concat</h3>
+
+<p><code>concate</code> &ndash; 다수의 리스트 요소들을 합치는 메소드</p>
+
+<p><code>scala
+List.concat(List('a', 'b'), List('c'))      // List(a, b, c)
+List.concat(List(), List('b'), List('c'))   // List(b, c)
+List.concat(()                              // List()
+</code></p>
+
+<h2>16.9 Processing multiple list together</h2>
+
+<p>튜플의 &lsquo;zipped&rsquo; 메소드는 여러 리스트에 대해 수행해야할 몇 개의 같은 연산을 그냥 한 리스트로 일반화함.</p>
+
+<p><code>scala
+(List(10, 20), List(3, 4, 5)).zipped.map(_ * _)     // List(30, 80), 3번째 요소는 버려짐.
+</code></p>
+
+<p><code>exists</code>와 <code>forall</code>에 대해 비슷하게 <code>zipped</code>을 하면,</p>
+
+<p><code>scala
+(List("abc", "de"), List(3, 2)).zipped.forall(_.length == _)    // true
+(List("abc", "de"), List(3, 2)).zipped.exists(_.length != _)    // false
+</code></p>
+
+<h2>16.10 Understanding Scala&rsquo;s type inference algorithm</h2>
+
+<p><code>sortWith</code>과 <code>msort</code> 사이의 차이점은 비교 함수에서 용인될 수 있는 문법적 형식임. 비교해보자면,</p>
+
+<p><code>scala
+msort((x: Char, y: Char) =&gt; x &gt; y)(abcde)       // List(e, d, c, b, a)  
+abcde sortWith (_ &gt; _)                          // List(e, d, c, b, a)
+</code></p>
+
+<p>두 표현식은 동일하지만, 첫 번째는 명명된 매개변수(named parameter)와 명시적인 타입으로 구성된 비교 함수의 좀 더 긴 형식을 사용하는 반면, 두 번째는 구체적인 형식인 <code>(_ &gt; _)</code>를 사용. 물론, <code>sortWith</code>으로도 첫 번째처럼 긴 형식의 비교 함수를 사용할 수 있음.</p>
+
+<p>그러나 짦은 형식은 <code>msort</code>에서는 사용할 수 없음!</p>
+
+<p><code>scala
+msort(_ &gt; _)(abcde) // error: missing parameter type for expanded function ((x$1, x$2) =&gt; x$1.$greater(x$2))
+</code></p>
+
+<p>스칼라에서 타입 추론은 flow 기반임. 메소드 <code>m(args)</code>에서 추론자(inferencer)는 메소드 m이 타입을 알고 있는지를 확인함. 이 타입은 인자의 기대되는 타입을 추론하는데 사용됨.</p>
+
+<p>예를 들어, <code>abcde.sortWith(_ &gt; _)</code>에서 <code>abcde</code>는 <code>List[Char]</code> 타입. 따라서, <code>sortWith</code>은 <code>(Char, Char) =&gt; Boolean</code> 타입의 인자를 취하는 메소드임을 알 수 있음.</p>
+
+<p>함수 인자의 매개변수 타입을 알고 있기 때문에, 명시적으로 기술할 필요가 없음. 추론자(inferencer)는 <code>(_ &gt; _)</code>는 <code>((x: Char, y: Char) =&gt; x &gt; y)</code>로 확장되어야 함을 추정할 수 있음.</p>
+
+<p>두 번째 <code>msort(_ &gt; _)(abcde)</code>의 경우, <code>msort</code>의 타입은 커리(curry)됨. 다형적(polymorphic) 메소드 타입은 <code>T</code>가 아직 임의의 타입일 때 <code>List[T]</code>에서 <code>List[T]</code>까지 함수의 <code>(T, T) =&gt; Boolean</code> 타입을 인자로 취함.</p>
+
+<p><code>msort</code> 메소드는 그 인자가 적용되기 전에 매개변수 타입 (의 인스턴스)로 초기화되어야 함. <code>msort</code> 인스턴스의 정확한 타입을 알지 못하므로, 자신의 첫 번째 인자 타입을 추론할 수 없음.</p>
+
+<p>이 때, 타입 추론자는 전략을 바꾸어 메소드의 적당한 인스턴스 타입을 결정하기 위해 메소드 인자를 확인함. 주어진 짧은 함수 리터럴 <code>(_ &gt; _)</code>의 타입 확인은 <code>_</code>로 표시된 암묵적 함수 매개변수의 타입에 대한 정보가 없기 때문에 실패함.</p>
+
+<p>한 가지 해법은 <code>msort</code>에 명시적 매개변수 타입을 전달하는 것임.</p>
+
+<p><code>scala
+msort[Char](_ &gt; _)(abcde) // List(e, d, c, b, a)
+</code></p>
+
+<p><code>msort</code>의 정확한 인스턴스 타입을 이제 알고 있으므로, 인자의 타입을 추론할 수 있음.</p>
+
+<p>다른 해법은 <code>msort</code> 메소드를 자신의 매개변수가 스왑되도록 재작성하는 것임.</p>
+
+<p>``` scala
+def msortSwapped<a href="xs:%20List[T]">T</a>(less: (T, T) => Boolean): List[T] = {</p>
+
+<pre><code>// msort와 같은 구현, 그러나 인자들이 swap됨.
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이제 타입 추론은 성공할 것임.</p>
+
+<p><code>scala
+msortSwapped(abcde)(_ &gt; _) // List(e, d, c, b, a)
+</code></p>
+
+<p>추론자는 <code>msortSwapped</code>의 매개변수 타입을 결정하기 위해 첫 번째 매개변수 <code>abcde</code>의 알려진 타입을 사용함. <code>msortSwapped</code>의 정확한 타입을 알게 되면, 이어서 두 번째 매개변수인 <code>(_ &gt; _)</code>의 타입을 추론할 수 있음.</p>
+
+<p>추론 계획(inference scheme)은 다음의 라이브러리 설계 원리를 도출함.</p>
+
+<blockquote><p>비함수 인자와 함수 인자를 취하는 다형성을 지닌 메소드를 설계할 때, 함수 인자는  자신에 의해 커리된 리스트 매개변수의 마지막에 둬야함. (※. 타입 유추가 flow 기반이기 때문. 즉,  첫 번째 명시적인 타입을 지닌 인자인 비함수 인자에 의해 타입 유추를 결정하기 때문임.)</p>
+
+<p>When designing a polymorphic method that takes some non-function arguments and a function argument, place the function argument last in a curried parameter list by its own.</p></blockquote>
+
+<p>좀 더 복잡한 fold의 경우, 328 페이지의 <code>flattenRight</code> 메소드의 바디처럼 표현식에 명시적인 매개변수 타입이 왜 필요할까?</p>
+
+<p><code>scala
+(xss :\ List[T]()) (_ ::: _)
+</code></p>
+
+<p>fold-right의 타입은 두 가지 타입 변수를 가지므로 다형적임.</p>
+
+<p>``` scala</p>
+
+<pre><code>(xs :\ z)(op)
+</code></pre>
+
+<p>```</p>
+
+<p><code>xs</code>의 타입은 임의의 A 타입의 리스트로, <code>xs: List[A]</code>이고 시작값 <code>z</code>는 다른 타입 &lsquo;B'일 것이며, <code>op</code> 연산은 A 타입과 B 타입 두 개의 인자를 취해 결과로 B 타입을 반환해야 함. 예를 들면 <code>op: (A, B) =&gt; B</code>.</p>
+
+<p><code>z</code>의 타입은 리스트 <code>xs</code>의 타입과 무관하므로, 타입 추론시에 <code>z</code>에 대해 아무런 컨텍스트 정보가 없음.</p>
+
+<p>328 페이지의 잘못된 버전의 <code>flattenRight</code> 살펴보면,</p>
+
+<p>``` scala</p>
+
+<pre><code>(xss :\ List())(_ ::: _) // 컴파일 안됨
+</code></pre>
+
+<p>```</p>
+
+<p>시작값 <code>z</code>는 빈 리스트 <code>List()</code>이고 추가적인 타입 정보가 없으므로 자신의 타입은 <code>List[Nothing]</code>으로 추론됨. 따라서, 추론자는 fold되는 B 타입을 <code>List[Nothing]</code>이라고 추론함. 그러므로, fold의 <code>(_ ::: _)</code>는 아래의 타입으로 기대됨.</p>
+
+<p>``` scala</p>
+
+<pre><code>(List[T], List[Nothing]) =&gt; List[Nothing]
+</code></pre>
+
+<p>```</p>
+
+<p>가능한 타입이긴 하지만, 이 연산은 항상 빈 리스트를 두 번째 인자로 취하기 때문에 빈 리스트를 결과로 반환함. 즉, 타입 추론이 너무 이른 시점에 <code>List()</code>에 대해 결정되버림. <code>op</code>의 타입이 보였을 때까지 기다렸어야 함.</p>
+
+<p>커리(curry)된 메소드의 메소드의 타입을 결정하는데 첫 번째 인자에 대해서만 고려하는 규칙이 문제의 근원임. 규칙이 완화되더라도 추론자는 <code>op</code>에 대한 타입을 제시할 수 없음. 따라서, 프로그래머로부터 명시적인 타입 주석으로만 해결될 수 있는 이러지도 저러지도 못하는 시츄에이션임.</p>
+
+<h2>16.11 Conclusion</h2>
+
+<p>다음 장에서는 콜렉션에 대해 살펴보겠음.</p>
+
+<h2>The Mores</h2>
+
+<ul>
+<li><a href="http://www.javacodegeeks.com/2011/09/scala-tutorial-tuples-lists-methods-on.html">Scala Tutorial – Tuples, Lists, methods on Lists and Strings</a></li>
+<li><a href="http://stackoverflow.com/questions/10866639/scala-difference-between-a-seq-and-a-list">Scala: The Difference between a Seq and a List</a></li>
+<li><a href="http://stackoverflow.com/questions/10999024/scala-var-list-vs-val-mutablelist">Scala: var List vs val MutableList</a></li>
+<li><a href="http://www.scala-lang.org/api/current/index.html#scala.collection.mutable.MutableList">API: scala.collection.mutable.MutalbleList</a></li>
+<li><a href="http://stackoverflow.com/questions/10475493/performance-consideration-between-and-operators-in-scala">Performance consideration between /: and :\ operators in Scala</a></li>
+<li><a href="http://stackoverflow.com/questions/1446419/how-do-you-know-when-to-use-fold-left-and-when-to-use-fold-right">How do you know when to use fold-left and when to use fold-right?</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 15장]]></title>
+    <link href="http://cluno.github.io/blog/2013/03/26/programming-in-scala-15-jang/"/>
+    <updated>2013-03-26T07:23:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/03/26/programming-in-scala-15-jang</id>
+    <content type="html"><![CDATA[<p>Scala는 돌아서면 잊어버려 15장부터는 노트합니다. 편의상 음슴체로 갑니다.</p>
+
+<!-- more -->
+
+
+<h1>15 Case Classes and Pattern Matching</h1>
+
+<h2>15.1 A simple example</h2>
+
+<p>산술 연산을 위한  <code>case</code> 클래스 정의는 다음과 같음.</p>
+
+<p><code>scala
+abstract class Expr
+case class Var(name: String) extends Expr
+case class Number(name: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+</code></p>
+
+<h3>Case classes</h3>
+
+<p>클래스명과 동일한 factory 메소드가 추가됨</p>
+
+<p><code>scala
+val v = Var("x")
+val op = BinOp("+", Number(1), v)   
+</code></p>
+
+<p>클래스 매개변수 리스트의 모든 인자는 (암묵적으로) <code>val</code> prefix를 가지기 때문에 멤버변수가 됨.</p>
+
+<p><code>scala
+v.name
+op.left
+</code></p>
+
+<p>컴파일러가 알아서 <code>toString</code>, <code>hashCod</code>, <code>equals</code> 를 구현함 (참고, Scala 에서는 == 가 equals 를 대신함)</p>
+
+<p><code>scala
+println(op)
+op.right == Var("x")
+</code></p>
+
+<p>다른 복사본을 만들어주는 <code>copy</code> 메소드가 추가됨</p>
+
+<p><code>scala
+op.copy(operator = "-") // BinOp(-, Number(1.0), Var(x))
+</code></p>
+
+<h3>Pattern Matching</h3>
+
+<p>패턴매칭을 이용한 몇 가지 산술식의 단순화 (예. 이중부정, 0 더하기, 1 곱하기)</p>
+
+<p>``` scala
+def simplifyTop(expr: Expr) : Expr = expr match {</p>
+
+<pre><code>case UnOp("-", UnOp("-", e)) =&gt;  e  
+case BinOp("+", e, Number(0)) =&gt; e  
+case BinOp("*", e, Number(1)) =&gt; e
+case _ =&gt; expr
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>switch</code>문과 유사한 <code>match</code>표현식</p>
+
+<p><code>scala
+selector match { alternatives }
+  switch (selector) { alternatives }
+</code></p>
+
+<ul>
+<li><code>match</code> 는 결과를 수반하는 표현식</li>
+<li>alternative 표현식, 즉 패턴은 다음 <code>case</code>로 떨어지지(fall-though) 않음</li>
+<li>하나라도 매칭되지 않으면 <code>MatchError</code> 예외 발생.</li>
+</ul>
+
+
+<p>기본 공백 <code>case</code>의 패턴 매칭 (<code>Unit</code>값을 반환,  <code>MatchError</code>를 피하기 위한 꼼수)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp(op, left, right) =&gt;
+    println(expr + " is a binary operation")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.2 Kinds of patterns</h2>
+
+<h3>Wildcard Patterns</h3>
+
+<p>이항연산의 요소와 무관한 와일드카드 패턴</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp(_, _, _) =&gt; println(expr + " is a binary operation")
+case _ =&gt; println("It's something else")
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Constant patterns</h3>
+
+<p>literal을 상수값으로 사용하는 패턴</p>
+
+<p>``` scala
+def describe(x: Any) = x match {</p>
+
+<pre><code>case 5 =&gt; "five"
+case true =&gt; "truth"
+case "hello" =&gt; "hi!"
+case Nil =&gt; "the empty list"
+case _ =&gt; "something else"
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Variable patterns</h3>
+
+<p>임의의 변수를 이용하는 패턴 (와일드카드 패턴과 달리 <code>Object</code>에만 한정)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case 0 =&gt; "zero"
+case somethingElse =&gt; "not zero: " + somethingElse
+</code></pre>
+
+<p>}
+```</p>
+
+<p>변수와 상수의 구분: 소문자로 시작할 경우에만 패턴 변수로, 그렇지 않으면 상수로 취함</p>
+
+<p>``` scala
+E match {</p>
+
+<pre><code>case Pi =&gt; "strange math? Pi = " + Pi
+case _ =&gt; "OK"
+</code></pre>
+
+<p>} // OK에 매칭</p>
+
+<p>E match {</p>
+
+<pre><code>case pi =&gt; "strange math? Pi = " + Pi 
+</code></pre>
+
+<p>} // pi에 매칭
+```</p>
+
+<p><code>pi</code>는 변수이므로 모든 input과 매칭. 수식어를 붙여주거나 back-tick 문법을 사용</p>
+
+<p>``` scala
+E match {</p>
+
+<pre><code>case `pi` =&gt; "strange math? Pi = " + pi
+case _ =&gt; "OK"
+</code></pre>
+
+<p>} // OK에 매칭
+```</p>
+
+<h3>Constructor patterns</h3>
+
+<p>생성자의 이름과 extra 패턴으로 생성자 매개변수를 확인. (deep match: 상위 레벨의 객체도 확인하고 이후 패턴에 대해 그 객체의 내용물도 확인하는 패턴)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp("+", e, Number(0)) =&gt; println("a deep match")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Sequence patterns</h3>
+
+<p>고정 길이 매칭</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case List(0, _, _) =&gt; println("found it")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>임의 길이 매칭</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case List(0, _*) =&gt; println("found it")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Tuple patterns</h3>
+
+<p>``` scala
+def tupleDemo(expr: Any) =</p>
+
+<pre><code>expr match {
+    case (a, b, c) =&gt; println("matched " + a + b + c)
+    case _=&gt;
+}
+</code></pre>
+
+<p>```</p>
+
+<h3>Typed patterns</h3>
+
+<p>타입 테스트/캐스팅을 위한 매칭</p>
+
+<p>``` scala
+def generalSize(x: Any) = x match {</p>
+
+<pre><code>case s: String =&gt; s.length      // generalSize("abc")
+case m: Map[_, _] =&gt; m.size     // generalSize(Map( 1 -&gt; '2', 2 -&gt; 'b'))
+case _ =&gt; -1                    // generalSize(math.Pi)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>타입 테스트/캐스팅용 <code>Any</code> 클래스에 <code>isInstanceOf</code>와 <code>asInstanceOf</code> 메소드가 있으나 패턴매칭을 권장</p>
+
+<p><strong>타입 소거(type erasure)</strong> &ndash; Scala도 런타임시 타입 정보를 모름 (단, <code>Array</code>는 예외)</p>
+
+<h3>Variable binding</h3>
+
+<p>변수가 바인딩된 패턴 &ndash; 매칭되는 패턴이 변수로 반환됨</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case UnOp("abs", e @ UnOp("abs", _)) =&gt; e   // 변수 이름, @, 패턴
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.3 Pattern guards</h2>
+
+<p>Scala에서는 패턴이 선형적(linear), 패턴의 변수는 패턴 내에 한번만 쓰임.</p>
+
+<p>``` scala
+def simplifyAdd(e: Expr) = e match {</p>
+
+<pre><code>case BinOp("+", x, x) =&gt; BinOp("*", x, Number(2))   // error: x is already defined as value x
+case _ =&gt; e
+</code></pre>
+
+<p>}
+```</p>
+
+<p>패턴 가드 (임의의 boolean 표현식), 가드 표현식이 참일 경우만 매칭됨</p>
+
+<p>``` scala
+def simplifyAdd(e: Expr) = e match {</p>
+
+<pre><code>case BinOp("+", x, y) if x == y =&gt;
+    BinOp("*", x, Number(2))
+case _ =&gt; e
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.4 Pattern overlaps</h2>
+
+<p>구체적인 패턴을 먼저 기술하고 일반적인 패턴을 기술하는 식으로 오버래핑</p>
+
+<p>``` scala
+def simplifyTop(expr: Expr) : Expr = expr match {</p>
+
+<pre><code>case UnOp("-", UnOp("-", e)) =&gt;  e  
+case BinOp("+", e, Number(0)) =&gt; e  
+case BinOp("*", e, Number(1)) =&gt; e
+case UnOp(op, e) =&gt; 
+    UnOp(op, simplifyAll(e))
+case BinOp(op, l, r) =&gt;
+    BinOp(op, simplifyAll(l), simplifyAll(r))
+case _ =&gt; expr
+</code></pre>
+
+<p>}
+```</p>
+
+<p>그렇지 않으면 컴파일 에러</p>
+
+<p>``` scala
+def simplifyBad(expr: Expr): Expr = expr match {</p>
+
+<pre><code>case UnOp(op, e) =&gt; UnOp(op, simplifyBad(e))
+case UnOp("-", UnOp("-", e)) =&gt; e           // error: unreachable code
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.5 Sealed classes</h2>
+
+<p><code>sealed</code> 키워드로 부모 클래스를 봉인하면 미리 정의된 하위 case 클래스의 계층 구조를 부모 클래스의 기본 패턴 조합으로 설정.</p>
+
+<p>봉인 &ndash; 런타임시 생성되는 하위 case 클래스의 추가를 막음 (단, 같은 파일에 있는 것들은 예외)</p>
+
+<p>``` scala
+sealed abstract class Expr</p>
+
+<pre><code>case class Var(name: String) extends Expr
+case class Number(name: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+</code></pre>
+
+<p>```</p>
+
+<p>기본 패턴 조합이 아닌 경우, 컴파일 경고가 발생 (match is not exhaustive!)</p>
+
+<p>``` scala
+def describe(e: Expr): String = e match {</p>
+
+<pre><code>case Number(_) =&gt; "a number"
+case Var(_) =&gt; "a variable"
+</code></pre>
+
+<p>}
+```</p>
+
+<p>컴파일 경고를 피할려면, <code>RuntimeException</code>을 던지거나 <code>@unchecked</code> 주석을 활용</p>
+
+<h2>15.6 The Option type</h2>
+
+<p>Option 타입 &ndash; Some(x) 형태이거나 혹은 None 값의 형태. Collection에 의해 생성</p>
+
+<p>``` scala
+val capitals = Map(&ldquo;France&rdquo; &ndash;> &ldquo;Paris&rdquo;, &ldquo;Japan&rdquo; &ndash;> &ldquo;Tokyo&rdquo;)</p>
+
+<pre><code>capitals get "France"       // Some(Paris)
+capitals get "North Pole"   // None
+</code></pre>
+
+<p>```</p>
+
+<p>일반적으로 패턴 매칭에서 선택적인 값을 가져올 때 사용</p>
+
+<p>``` scala
+def show(x: Option[String]) = x match {</p>
+
+<pre><code>case Some(s) =&gt; s
+case None =&gt; "?"
+</code></pre>
+
+<p>}</p>
+
+<p>show(capitals get &ldquo;Japan&rdquo;)          // Tokyo
+show(capitals get &ldquo;North Pole&rdquo;      // ?
+```</p>
+
+<p>Java의 경우 <code>HashMap</code>은 값을 찾지 못하면 <code>null</code>을 반환하는데 오류에 취약함. Java에서는 <code>null</code> 확인을 잊어버려  <code>NullPointerException</code>이 매우 빈번하게 발생함.</p>
+
+<p>Scala에서는 이런 게 안 통함, 왜냐하면 해쉬맵은 value 타입만 저장할 수 있으며 <code>null</code>은 value 타입으로 허용되지 않음.</p>
+
+<h2>15.7 Patterns everywhere</h2>
+
+<h3>Patterns in variable definitions</h3>
+
+<p>단일 할당으로 다중 변수 정의</p>
+
+<p><code>scala
+val myTuple = (123, "abc")      // myTuple: (Int, java.lang.String) = (123, abc)
+val (number, string) = myTuple  // number: Int = 123, string: java.langString =  abc
+</code></p>
+
+<p><code>case</code> 클래스 작업에 유용 &ndash; 정확한 <code>case</code> 클래스를 알고 있을 경우, 패턴으로 해체할 수 있음.</p>
+
+<p><code>scala
+val exp = new BinOp("*", Number(5), Number(1))
+val BinOp(op, left, right) = exp    // op: String =  *, left: Expr = Number(5.0), right: Expr = (Number1.0)
+</code></p>
+
+<h3>Case sequences as partial functions</h3>
+
+<p><code>case</code> 시퀀스는 함수 리터럴임 &ndash; 함수 리터럴을 쓰는 곳엔 <code>case</code> 시퀀스를 쓸 수 있음.</p>
+
+<p>아래 함수는 두 가지 case로 구성.</p>
+
+<p>``` scala
+val withDefault: Option[Int] => Int = {</p>
+
+<pre><code>case Some(x) =&gt; x
+case None =&gt; 0
+</code></pre>
+
+<p>}</p>
+
+<pre><code>withDefault(Some(10))   // Int = 10
+withDefault(None)       // Int = 0
+</code></pre>
+
+<p>```</p>
+
+<p>전형적인 Actor 코드에도 유용</p>
+
+<p>``` scala
+react {</p>
+
+<pre><code>case (name: String, actor: Actor) =&gt; {
+    actor ! getip(name)
+    act()
+}
+
+case msg =&gt; {
+    println("Unhandled message: " + msg)
+    act()
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>case</code> 시퀀스는 partial 함수를 제공 &ndash; 아래 예제는 정수형 리스트의 두 번째 요소를 반환하는 partial 함수.</p>
+
+<p>``` scala
+val second: List[Int] => Int = {</p>
+
+<pre><code>case x :: y :: _ =&gt; y           // 컴파일시 Nil 조합이 없다는 warning
+</code></pre>
+
+<p>}</p>
+
+<p>second(List(5, 6, 7))       // Int = 6
+second(List())              // MatchError
+```</p>
+
+<p><code>PartialFunction</code> 타입으로 다시 작성하면</p>
+
+<p>``` scala
+val second: PartialFunction[List[Int],Int] = {</p>
+
+<pre><code>case x :: y :: _ =&gt; y
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Partial 함수는 여러 개의 entry point를 제공. 이를 위한 <code>isDefinedAt</code> 메소드가 있음 &ndash; 함수가 특정한 값(entry point)에 정의되어 있는지를 테스트함.</p>
+
+<p><code>scala
+second.isDefinedAt(List(5, 6, 7)    // true
+second.isDefinedAt(List())          // false
+</code></p>
+
+<p>함수 리터럴 <code>{ case x :: y :: _=&gt; y }</code> 는 컴파일러에 의해 다음의 partial 함수로 변환됨.</p>
+
+<p>``` scala
+new PartialFunction[List[Int], Int] {</p>
+
+<pre><code>def apply(xs: List[Int]) = xs match {
+    case x :: y :: _ =&gt; y
+}
+
+def isDefinedAt(xs: List[Int]) = xs match {
+    case x :: y :: _ =&gt; true
+    case _ =&gt; false
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>가능한 완전한(complete) 함수로 작업. 왜냐하면 partial 함수를 사용하면 컴파일가 처리 못하는 런타임 에러를 허용하게 됨. 그러나 다룰  수 없는 값의 입력을 원치 않을 때 partial 함수를 사용하거나 혹은 partial 함수를 요구하는 프레임워크에서 그 함수를 호출하기 전에 isDefinedAt 메소드로 확인할 수 있음.</p>
+
+<h3>Patterns in for expressions</h3>
+
+<p>tuple 패턴으로 쓰인 <code>for</code> 표현식</p>
+
+<p><code>scala
+for((country, city) &lt;- capitals)
+</code></p>
+
+<p>패턴과 매칭되는 리스트 요소 뽑아내기</p>
+
+<p><code>scala
+val results = List(Some("apple"), None, Some("orange"))
+for(Some(fruit) &lt;- results) println(fruit) // apple orange
+</code></p>
+
+<h2>15.8 A Larger Example</h2>
+
+<p>x/(x+1)의 표현식을 다음과 같이 형태로 출력하는 <code>ExprFormatter</code>라는 클래스를 만들어 봄.</p>
+
+<pre><code>  x
+-----
+x + 1
+</code></pre>
+
+<p>수평 레이아웃의 경우, 아래와 같은 구조의 표현은 ( x + y ) * z + 1을 출력해야 함.</p>
+
+<p>``` scala
+BinOp(&ldquo;+&rdquo;,
+BinOp(&ldquo;*&rdquo;,
+BinOp(&ldquo;+&rdquo;, Var(&ldquo;x&rdquo;), Var(&ldquo;y&rdquo;)),</p>
+
+<pre><code>Var("z")),
+Number(1))
+</code></pre>
+
+<p>```</p>
+
+<p>레이아웃을 쉽게 읽으려면 중복 괄호는 제거해야함.
+괄호의 어디에다 두어야할지 알기 위해선 우선순위를 알아야함. 우선순위는 map 리터럴로 다음과 같이 표현할 수 있음.</p>
+
+<p>``` scala
+Map(</p>
+
+<pre><code>"|" -&gt; 0, "||" -&gt; 0, 
+"&amp;" -&gt; 1, "&amp;&amp;" -&gt; 1, …
+</code></pre>
+
+<p>)
+```</p>
+
+<p>그러나 위 방법은 해당 부분에 대한 우선순위의  사전 계산이 많이 포함되므로, 그냥 상승하는 우선순위(increasing precedence)에 대한 연산자 그룹을 정의하고 이로부터 각 연산자의 우선순위를 계산하면 됨.</p>
+
+<p>``` scala
+// 상승하는 우선순위의 그룹에 연산자를 저장함</p>
+
+<p>private val opGroups =</p>
+
+<pre><code>Array(
+    Set("|", "||"),
+    Set("&amp;", "&amp;&amp;"),
+    Set("^"),
+    Set("==", "!="),
+    Set("&lt;", "&lt;=", "&gt;", "&gt;="),
+    Set("+", "-")
+    Set("*", "%")
+)
+</code></pre>
+
+<p>```</p>
+
+<p><code>precedence</code> 변수는 연산자와 그들의 우선순위에 대한 맵으로 0부터 시작하는 정수값인데 두 개의 생성자로부터 생성됨.</p>
+
+<p>``` scala
+private val precedence = {</p>
+
+<pre><code>val assocs =
+    for {
+        i &lt;- 0 until opGroups.length
+        op &lt;- opGroups(i)
+    } yield op -&gt; i
+    Map() ++ assocs
+}
+</code></pre>
+
+<p>```</p>
+
+<p>첫 번째 생성자는 <code>onGroups</code> 배열의 모든 인덱스 <code>i</code>를 만들고, 두 번째 생성자는 <code>opGroups(i)</code>의 모든 연산자 <code>op</code>를 만듦. for문의 각 연산자가 연산자 op와 그 인덱스 i의 조합을 만들기 때문에 배열에 있는 연산자들의 상대적 위치에 의해 그들의 우선순위가 결정됨.</p>
+
+<p>단항 연산자의 우선순위는 모든 이항 연산자보다 높으므로 <code>opGroup</code> 배열의 길이로 설정함. (곱하기, 나누기보다 하나 높은 값임)</p>
+
+<p><code>scala
+private val unaryPrecedence = opGroups.length
+</code></p>
+
+<p>분수 연산자의 우선순위는 수직 레이아웃에 사용되므로 약간 다르게 다룸. 특별한 놈이니 -1을 할당함.</p>
+
+<p><code>scala
+private val fractionPrecedence = -1
+</code></p>
+
+<p>이제 <code>format</code> 메소드를 작성하겠음. format  메소드는 Expr 타입의 <code>e</code>와 <code>e</code> 표현을 에워싸는(enclosing) 연산자의 우선순위의 값 <code>enclPrec</code> 두 개의 인자가 있음. 이 메소드는 2차원 문자열 배열의 레이아웃 요소(<code>elem</code>)를 반환함.</p>
+
+<p><code>stripDot</code>은 보조 메소드임, private <code>format</code> 메소드는 표현를 만들기 위한 대부분의 작업을 함. 같은 이름의 마지막 메소드 <code>format</code>은 라이브러리 내 단독 public 메소드로써 처리할 표현을 넘겨받음.</p>
+
+<p>``` scala
+private def format(e: Expr, enclPrec: Int): Element =</p>
+
+<pre><code>e match {
+    case Var(name) =&gt;
+        elem(name)
+
+    case Number(num) =&gt;
+        def stripDot(s: String) =
+            if (s endsWith ".0")    s.substring(0, s.length - 2)
+                else    s
+            elem(stripDot(num.toString))
+
+    case UnOp(op, arg) =&gt;
+        elem(op)    beside format (arg, unaryPrecedence)
+
+    case BinOp("/", left, right) =&gt;
+        val top = format(left, fractionPrecedence)
+        val bot = format(right, fractionPrecedence)
+        val line = elem('-', top.width max bot.width, 1)
+        val frac = top above line above bot
+        if (enclPrec != fractionPrecedence) frac
+            else elem(" ") beside frac beside elem(" ")
+
+    case BinOp(op, left, right) = &gt;
+        val opPrec = precendecn(op)
+        val l = format(left, opPrec)
+        val r = format(right, opPrec + 1)
+        val oper = l beside elem(" " + op + " ") beside r
+        if (enclPrec &lt;= opPrec) oper
+            else elem("(") beside oper beside elem(")")
+}
+
+def format(e: Expr): Element = format(e, 0)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이하는 생략.</p>
+
+<h2>15.9 Conclusion</h2>
+
+<p>(생략)</p>
+
+<h2>The Mores</h2>
+
+<ul>
+<li><a href="http://booksites.artima.com/programming_in_scala/examples/html/ch15.html">15장 예제 소스</a></li>
+<li><a href="http://www.scala-lang.org/node/120">A Tour of Scala: Pattern Matching</a></li>
+<li><a href="http://www.artima.com/scalazine/articles/pattern_matching.html">The Point of Pattern Matching in Scala</a></li>
+<li><a href="http://scala-topics.org/scala-pattern-matching-a-case-for-new-thinking/">Scala pattern matching: A Case for new thinking?</a></li>
+<li><a href="http://eng.42go.com/pattern-matching-in-scala/">Pattern matching in Scala 2.10</a></li>
+<li><a href="http://dcsobral.blogspot.kr/2013/01/pattern-matching-on-abstract-types-with.html">pattern matching with abstract types with Scala 2.10</a></li>
+<li><a href="http://danielwestheide.com/blog/2012/12/12/the-neophytes-guide-to-scala-part-4-pattern-matching-anonymous-functions.html">Pattern Matching Anonymous Functions</a></li>
+<li><a href="http://www.ibm.com/developerworks/java/library/j-ft14/">Functional thinking: Either trees and pattern matching</a></li>
+<li><a href="http://kerflyn.wordpress.com/2011/02/14/playing-with-scalas-pattern-matching/">Playing with Scala&rsquo;s Pattern Matching</a></li>
+<li><a href="http://ikaisays.com/2009/04/04/using-pattern-matching-with-regular-expressions-in-scala/">Using pattern matching with regular expressions in Scala</a></li>
+<li><a href="http://www.codecommit.com/blog/scala/scala-for-java-refugees-part-4">Pattern Matching and Exceptions</a></li>
+<li><a href="http://notes.langdale.com.au/Querying_a_Dataset_with_Scala_s_Pattern_Matching.html">Querying a Dataset with Scala&rsquo;s Pattern Matching</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,745 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: OOP | Patrick Yoon]]></title>
+  <link href="http://cluno.github.io/blog/categories/oop/atom.xml" rel="self"/>
+  <link href="http://cluno.github.io/"/>
+  <updated>2014-03-21T22:38:45+09:00</updated>
+  <id>http://cluno.github.io/</id>
+  <author>
+    <name><![CDATA[Patrick Yoon]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[확장성있는 컴포넌트 개발 - 객체지향 스타일 vs 함수형 스타일]]></title>
+    <link href="http://cluno.github.io/blog/2013/10/27/buidling-scalable-components/"/>
+    <updated>2013-10-27T22:38:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/10/27/buidling-scalable-components</id>
+    <content type="html"><![CDATA[<p><a href="http://www.amazon.com/Scala-Action-Nilanjan-Raychaudhuri/dp/1935182757">Scala in Action</a>의 8장의 내용을 확실히 이해하고자 되새김질 차원에서 하나하나 타이핑해가며 번역하였다. <!-- more --></p>
+
+<p>Scala in Action의 8장 제목은 &lsquo;Building scalable and extensible components'이다. 8장에서 소개되는 문법(추상 타입 멤버, 셀프 타입 멤버, 타입 투영, 팬텀 타입, 타입 클래스 등)에 대한 부분은 생략하고 실무사례로 예로 들고 있는 급여명세 시스템에 대한 부분만 간략히 번역해 보았다.</p>
+
+<h3>재사용</h3>
+
+<p>먼저, 재사용 가능한 컴포넌트를 Scala로 어떻게 작성하는지 간단히 살펴보기 위해 일반적인 주문시스템을 만들어보자.</p>
+
+<p>일반적인 주문시스템은 다음의 컴포넌트로 구성된다.</p>
+
+<ul>
+<li>주문(Order) &ndash; 고객이 주문한 내용을 기술.</li>
+<li>창고(Inventory) &ndash; 상품을 저장하고 있는 컴포넌트, 주문 전에 상품이 있는지 확인해야 함.</li>
+<li>배송(Shipping) &ndash; 고객 주문 처리 방법을 기술.</li>
+</ul>
+
+
+<p>실제는 이보다 더 복잡하지만, 더 큰 컨텍스트로 쉽게 확장할 수 있기 때문에 이 정도로 단순화시키자.</p>
+
+<p>추상 타입 멤버(abstract type memeber)로 주문시스템 컴포넌트를 아래와 같이 추상화할 수 있다.</p>
+
+<p>``` scala
+trait OderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>OrderSystem</code>은 3가지 추상 멤버를 선언하고 있다. 동시에 각 타입은 상한을 정하고 있다. 타입 <code>O</code>는 <code>Order</code> 타입의 하위 타입이다. 마찬가지로 <code>I</code>와 <code>S</code>는 <code>Inventory</code>와 <code>Shipping</code>의 하위 타입이다. 따라서, 각 컴포넌트에 대해 <code>Order</code>, <code>Inventory</code>, <code>Shipping</code>의 로직은 다음과 같이 정의할 수 있다.</p>
+
+<p>``` scala
+trait OrderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+
+trait Order { def placeOrder (i: I): Unit }
+trait Inventory { def itemExits(order: O): Boolean }
+trait Shipping { def scheduleShipping(order: O): Long }
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 컴포넌트를 한 트레이트(trait, 이하 트레이트)로 묶으면 모두가 한 장소에서 집약되고 캡슐화된다는 장점이 있다. 각 컴포넌트의 인터페이스는 갖추었지만, 주문을 하려면 몇 가지 단계를 구현해야한다.</p>
+
+<ul>
+<li>창고에 물품이 있는지를 확인.</li>
+<li>해당 창고에 대해 주문을 함.</li>
+<li>배송 일정을 잡음.</li>
+<li>창고에 물건이 없으면 주문을 하지 않고 창고에 제품을 보충하도록 알림.</li>
+</ul>
+
+
+<p><code>OderingSyste</code>에 정의된 <code>Ordering</code> 트레이트에 대해 이 단계들을 구현해보자.</p>
+
+<p>``` scala
+trait Odering { this: I with S =></p>
+
+<pre><code>def placeOrder(o: O): Option[Long] = {
+    if(itemExists(o)) {
+        o.placeOrder (this)
+        Some(scheduleShipping(o))
+    }
+    else None
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>placeOrder</code> 메소드는 위에서 언급된 모든 단계들을 셀프 타입 주석(self type annotation)의 은총으로 구현된다. <code>Ordering</code>은 이제 <code>itemExists</code> 메소드의 <code>Inventory</code>와 <code>sheduleShipping</code> 메소드의  <code>Shipping</code>에 의존하게 된다. <code>with</code> 키워드로 다중 셀프 타입 주석을 기술할 수 있음을 주목하자. 이상 다음은 모든 부분들을 합친 주문시스템 컴포넌트이다.</p>
+
+<p>``` scala
+trait OrderingSystem {</p>
+
+<pre><code>type O &lt;: Order
+type I &lt;: Inventory
+type S &lt;: Shipping
+
+trait Ordering { this: I with S =&gt;
+    def placeOrder (o: O): Option[Long] = {
+        if(itemExists(o) {
+            o.placeOrder(this)
+            Some(scheduleShippng(o))
+        }
+        else None
+    }
+}
+</code></pre>
+
+<p>}
+<code>``
+</code>OrderingSystem<code>의 추상 타입 멤버들은 이 컴포넌트가 구체적인 구현에 의존하지 않는 서비스임을 나타낸다. 이는 여러가지 상황에서 재사용할 수 있다. 결합 기능으로</code>Inventory<code>와</code>Shipping<code>트레이트를 조립해서</code>Odering<code>트레이트를 만들 수 있고, 셀프 타입으로</code>Ordering<code>은 트레이트 결합으로 제공되는 서비스를 사용할 수 있다. 이 모든 추상은 Scala에서 확장성 있고 재사용성 있는 컴포넌트를 만들 수 있는 블딩블럭을 제공한다. 도서 주문시스템을 구현하고자 할 경우,</code>OderingSystem`을 아래와 같이 쉽게 재사용할 수 있다.</p>
+
+<p>``` scala
+object BookOrderingSystem extends OrderingSystem {</p>
+
+<pre><code>type O = BookOrder
+type I = AmazonBookStore
+type S = UPS
+
+class BookOrder extends Order {
+    def placeOrder(i: AmazonBookStore): Unit ...
+}
+
+trait AmazonBookStore extends Inventory {
+    def itemExists(o: BookOrder) = ...
+}
+
+trait UPS extends Shipping {
+    def scheduleShipping(order: BookOrder): Long = ...
+}
+
+object BookOrdering extends Ordering with AmazoneBookStore with UPS
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>BookOrderingSystem</code>은 구체적인 구현을 모두 제공하며 도서를 주문하는 <code>BookOrdering</code> 객체를 생성한다. 우리가 할 일은 임포트(import, 이하 임포트)해서 <code>BookOrderingSystem</code>을 사용하는 것이 전부다.</p>
+
+<p><code>scala
+import BookOrderingSystem._
+BookOrdering.placeOrder(new BookOrder)
+</code></p>
+
+<h3>Expression problem과 확장 가능성</h3>
+
+<p>소프트웨어 컴포넌트를 확장해서 현재 소프트웨어 시스템에 기존 소스 코드를 바꾸지 않고 연동하는 것은 소프트웨어 공학이 지닌 근본적인 도전이다. 많은 닝겐들이 <em>Expression problem</em> 을 사용해 객체 지향 상속이 소프트웨어 컴포넌트 확장의 면에서 실패하는 것을 보여주었다. Expression problem은 유형별로 데이터 타입을 정의하는 도전인데, 재컴파일 하지 않고 정적 타입 안정성을 유지하며 데이터 타입의 새 유형과 연산을 추가할 수 있어야 한다는 것이다. 보통 이런 도전은 프로그래밍 언어의 강점과 약점을 증명하는데 쓰인다. Scala에서는 이 문제를 어떻게 풀 수 있는지 살펴보자.</p>
+
+<p>목표는 데이터 타입과 기존 코드의 재컴파일 없이 그러나 정적 타입 안정성(static type safety)은 유지하며 새로운 데이터 타입과 새로운 연산을 정의하는 것이다.</p>
+
+<p>Expression problem은 다음의 요구조건을 모두 만족하며 구현되어야 한다.</p>
+
+<ul>
+<li>두 가지 차원에서 확장 가능성. 새 타입의 정의와 모든 타입에 대해 동작하는 연산의 추가.</li>
+<li>강력한 정작 타입 안정성. 타입 캐스팅과 리플렉션은 당연한 것임.</li>
+<li>기존 코드의 수정이 있어서는 안되며, 중복도 없어야 함.</li>
+<li>컴파일 작업은 분리되어야 함.</li>
+</ul>
+
+
+<p>&lsquo;직원 급여명세 시스템'의 실무 사례로 이 문제를 살펴보자.
+``` scala
+case class Employee(name: String, id: Long)</p>
+
+<p>trait Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+</code></pre>
+
+<p>}</p>
+
+<p>class USPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}</p>
+
+<p>class CanadaPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>Payroll</code> 트레이트는 직원 콜렉션을 받아 그들의 급여를 처리하는 <code>processEmployees</code> 메소드를 선언하고 있다. <code>USPayroll</code>과 <code>CanadaPayroll</code>은 개별 국가마다 급여를 처리하는 방법에 따라 <code>processEmployees</code> 메소드를 구현하고 있다.</p>
+
+<p>비지니스의 변화로 인해 일본 직원의 급여도 처리해야 된다고 하자. 간단하다. <code>Payroll</code> 트레이트를 상속하는 다른 클래스를 추가하기만 하면 된다.</p>
+
+<p>``` scala
+class JapanPayroll extends Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]) = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이는 expression problem이 말하는 확장의 한 종류이다. 타입 안정성이란 답을 얻었다. 이제 <code>JapanPayroll</code>을 한 확장으로 추가할 수 있고, 기존 시스템에 컴파일을 분리하여 삽입할 수 있다.</p>
+
+<p>새로운 연산을 추가하려 할 때는 무슨 일이 발생하는가? 이번에는 비지니스가 계약자(contractor)를 고용하기로 결정했고, 이들의 월 급여를 처리해야 한다. 새로운 <code>Payroll</code> 인터페이스는 다음과 같아야 할 것이다.</p>
+
+<p>``` scala
+case class Employee(name: String, id: Long)
+case class Contractor(name: String)</p>
+
+<p>trait Payroll extends super.Payroll {</p>
+
+<pre><code>def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+</code></pre>
+
+<p>}
+```</p>
+
+<p>문제는 전부를 재빌드해야 하기 때문에, expression problem의 제약으로 인해 되돌아가서 트레이트를 수정할 수 없다는 것이다. 수정하지 않고 어떻게 기존 시스템에 기능을 추가할 것인지는 실제적인 문제이다. expression problem 해법의 어려움을 이해하기 위해, 방문자(Visitor) 패턴을 사용해 이 문제를 풀어보자. 다음과 같이 직원 급여를 처리하는 방문자 하나를 만들자.</p>
+
+<p>``` scala
+case class USPayroll {</p>
+
+<pre><code>def accept(v: PayrollVisitor) = v.visit(this)
+</code></pre>
+
+<p>}</p>
+
+<p>case class CanadaPayroll {</p>
+
+<pre><code>def accept(v: PayrollVisitor) = v.visit(this)
+</code></pre>
+
+<p>}</p>
+
+<p>trait PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwale]
+def visit(payroll: CanadaPayroll): Either[String, Throwale]
+</code></pre>
+
+<p>}</p>
+
+<p>class EmployeePayrollVisitor extends PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwale] = ...
+def visit(payroll: CanadaPayroll): Either[String, Throwale] = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>USPayroll</code>과 <code>CanadaPayroll</code> 타입 모두 급여명세(payroll) 방문자를 억셉트한다. 직원들의 급여를 처리하기 위해 <code>EmployeePayrollVisitor</code> 인스턴스를 사용할 것이다. 계약자의 매달 급여를 처리하기 위해, <code>ContractorPayrollVisitor</code>라 불리는 새 클래스를 다음과 같이 쉽게 만들 수 있다.</p>
+
+<p>``` scala
+class ContractorPayrollVisitor extends PayrollVisitor {</p>
+
+<pre><code>def visit(payroll: USPayroll): Either[String, Throwable] = ...
+def visit(payroll: CanadaPayroll): Either[String, Throwable] = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>방문자 패턴을 사용하면, 새 연산을 추가하는 것은 쉽지만, 타입은 어떠한가? <code>JapanPayroll</code>이라 불리는 새 타입을 추가하려면, 되돌아가서 모든 방문자가 <code>JapanPayroll</code>를 허용하도록 수정해야 한다. 첫 번째 해법은 새 타입을 쉽게 추가할 수 있고, 두 번째 해법은 새 연산을 쉽게 추가할 수 있다. 그러나 우리는 두 가지 측면을 모두 처리할 수 있는 해법을 원한다.</p>
+
+<h3>객체지향 스타일</h3>
+
+<p>Scala에서 추상 타입 멤버와 트레이트 결합을 사용해 이 문제를 어떻게 풀어가는지 살펴보자. 동일한 급여명세 시스템을 사용해서, 어떻게 새로운 타입을 추가하는 동시에 타입 안정성을 깨지않고 급여명세 시스템에 새로운 연산을 쉽게 추가할 수 있는지 살펴보자.</p>
+
+<p>아래와 같이 기본 급여명세 시스템을 추상 멤버 타입을 지닌 트레이트로 정의해보자.</p>
+
+<p>``` scala
+trait PayrollSystem {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+type P &lt;: Payroll
+trait Payroll {
+    def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+    def processPayroll(p: P): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 것을 한 트레이트에 두게 되면, 이를 모듈로 다룰 수 있다. <code>P</code> 타입은 <code>Payroll</code> 트레이트의 어떤 하위 타입을 의미하는데, 직원들의 급여를 처리하기 위해 추상 메소드로 선언되어 있다. <code>processPayroll</code> 메소드는 주어진 <code>Payroll</code> 타입에 대해 급여명세(payroll)을 처리하기 위해 구현되어야 할 필요가 있다. 아래는 트레이트가 미국과 캐나다 급여명세에 대해 어떻게 확장될 수 있는지 보여준다.</p>
+
+<p>``` scala
+trait USPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class USPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("US payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Canada payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>급여명세 처리의 상세는 생략하였다. 미국 직원들의 급여명세를 처리하기 위해, <code>processPayroll</code> 메소드를 구현함으로써 <code>USPayrollSystem</code>을 구현할 수 있다.</p>
+
+<p>``` scala
+object USPayrollInstance extends USPayrollSystem {</p>
+
+<pre><code>type P = USPayroll
+def processPayroll(p: USPayroll) = {
+    val employees: Vector[Employee] = ...
+    val result = p.processEmployees(employees)
+    ...
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이런 설정으로 일본에 대해서 새로운 <code>Payroll</code> 타입을 추가할 수 있다. <code>PayrollSystem</code>을 확장한 트레이트를 만들면 된다.</p>
+
+<p>``` scala
+trait JapanPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = ...
+}
+</code></pre>
+
+<p>}
+<code>``
+이제 전부를 재컴파일하지 않고</code>Payroll`에 새로운 메소드를 추가하자.</p>
+
+<p>``` scala
+trait ContractorPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>type P &lt;: Payroll
+case class Contractor(name: String)
+
+trait Payroll extends super.Payroll {
+    def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>ContractorPayrollSystem</code> 내에 정의된 <code>Payroll</code> 트레이트는 오버라이딩되지 않고 <code>PayrollSystem</code>으로부터 <code>Payroll</code> 타입의 이전 정의를 가리운다. (※. 이를 쉐도잉(shadowing)이라고 하는 듯..) 이전 <code>ContractPayrollSystem</code> 컨텍스트 안에서 이전 정의는 <code>super</code> 키워드를 사용해 접근할 수 있다. 쉐도잉은 코드에서 예기치 않은 오류를 가져다 줄지도 모르나 이 상황에서는 오버라이딩하지 않고 낡은 <code>Payroll</code> 정의를 확장한다.</p>
+
+<p>주목할만한 또 한가지는 추상 멤버 타입 <code>P</code>를 재정의하고 있다는 것이다. <code>P</code>는 <code>processEmployees</code> 메소드와 <code>processContractors</code> 메소드 모두를 이해하는 <code>Payroll</code>의 하위 타입이 될 필요가 있다. 계약자(contractor)를 미국과 캐나다 모두에 대해 처리하기 위해, <code>ContractPayrollSystem</code> 트레이트를 확장하자.</p>
+
+<p>``` scala
+trait USContractorPayrollSystem extends USPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class USPayroll extends super.USPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("US contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaContractorPayrollSystem extends CanadaPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends super.CanadaPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Canada contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>USPayroll</code>과 <code>CanadaPayroll</code>의 이전 정의를 쉐도잉하고 있다. 또한 <code>processContractors</code> 메소드를 구현하기 위해 <code>Payroll</code> 트레이트의 새로운 정의를 결합하고 있다. 타입 안정성 요구사항을 기억하자. <code>Payroll</code> 트레이트를 결합하지 않으면, <code>USContractorPayrollSystem</code>나 <code>CanadaContractorPayrollSystem</code>의 구체적인 구현을 만들 때 오류를 얻게 된다. 마찬가지로 <code>processContractors</code> 연산를 <code>JapanPayrollSystem</code>에 추가할 수 있다.</p>
+
+<p>``` scala
+trait JapanContractorPayrollSystem extends JapanPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends super.JapanPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Japan contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>현 시점에서 expression problem을 성공적으로 풀어보았다. 다음은 전체 코드이다.</p>
+
+<p>``` scala
+package chap08.payroll</p>
+
+<p>trait PayrollSystem {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+type P &lt;: Payroll
+trait Payroll {
+    def processEmployees(employees: Vector[Employee]): Either[String, Throwable]
+}
+def processPayroll(p: P): Either[String, Throwable]
+</code></pre>
+
+<p>}</p>
+
+<p>trait USPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class USPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("US payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Canada payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait JapanPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends Payroll {
+    def processEmployees(employees: Vector[Employee]) = Left("Japan payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait ContractorPayrollSystem extends PayrollSystem {</p>
+
+<pre><code>type P &lt;: Payroll
+case class Contractor(name: String)
+trait Payroll extends super.Payroll {
+    def processContractors(contractors: Vector[Contractor]): Either[String, Throwable]
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait USContractorPayrollSystem extends USPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class USPayroll extends super.USPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("US contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait CanadaContractorPayrollSystem extends CanadaPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class CanadaPayroll extends super.CanadaPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Canada contract payroll")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>trait JapanContractorPayrollSystem extends JapanPayrollSystem with ContractorPayrollSystem {</p>
+
+<pre><code>class JapanPayroll extends super.JapanPayroll with Payroll {
+    def processContractors(contractors: Vector[Contractor]) = Left("Japan contract payroll")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Scala 일급 모듈(first-class module) 지원을 사용하면, 모든 트레이트와 클래스를 한 객체로 포장하고 전부를 재컴파일하지 않으면서 또 동시에 타입 안정성을 유지하며 기존 소프트웨어 컴포넌트를 확장할 수 있다. 구버전과 새버전의 <code>Payroll</code> 모두 이용할 수 있다는 점, 구성하는 트레이트에 의해 동작들이 조정되는 점을 주목하라. 직원과 계약자들 모두를 처리하기 위해 새 <code>Payroll</code>을 사용하려면, <code>ContractorPayrollSystem</code> 트레이트 중 하나를 결합해야 한다. 다음의 예제는 <code>USContractorPayrollSystem</code> 인스턴스를 어떻게 만드는지를 보여준다.</p>
+
+<p>``` scala
+object RunNewPayroll {</p>
+
+<pre><code>object USNewPayrollInstance extends USContractorPayrollSystem {
+    type P = USPayroll
+    def processPayroll(p: USPayroll) = {
+        p.processEmployees(Vector(Employee("a", 1)))
+        p.processContractors(Vector(Contractor("b")))
+        Left("payroll processed successfully")
+    }
+}
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val usPayroll = new USPayroll
+    USNewPayrollInstance.processPayroll(usPayroll)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>processPayroll</code> 메소드는 <code>Payroll</code> 트레이트의 <code>processEmployees</code>와 <code>processContractors</code> 둘 다를 호출하지만, 대신에 미국 직원의 급여를 어떻게 처리해야 할지 아는 기존 급여명세 시스템을 쉽게 사용할 수 있다. 왜냐하면 <code>USPayroll</code> 트레이트를 여전히 확신할 수 있기 때문이다. 남은 것은 추가적인 <code>processContractors</code> 부분을 구현하는 것이다.</p>
+
+<p>이상, 우리는 객체 지향 추상 가능성(Object oriented abstractions available)을 사용해 풀어보았다.</p>
+
+<h3>함수형 스타일</h3>
+
+<p>이제 함수형 프로그래밍 차원에서 접근해보자.</p>
+
+<p>급여명세(payroll) 프로세스는 두 가지 추상화에 의해 주도된다. 하나는 급여명세를 처리하는 국가(country)고 하나는 피지불인(payee)이다.<code>USPayroll</code> 클래스는 다음과 같을 것이다.</p>
+
+<p>``` scala
+case class USPayroll<a href="payees:%20Seq[A]">A</a> {</p>
+
+<pre><code>def processPayroll = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>타입 <code>A</code>는 피지불인의 타입을 나타낸다. 이는 직원일 수 있고, 계약자일 수 있다. 비슷하게 캐나다 급여명세 클래스는 다음과 같을 것이다.</p>
+
+<p>``` scala
+case class CanadaPayroll<a href="payees:%20Seq[A]">A</a> {</p>
+
+<pre><code>def processPayroll = ...
+</code></pre>
+
+<p>}
+```</p>
+
+<p>급여명세 프로세서 패밀리에 대한 유형 클래스를 나타내기 위해, 국가와 피지불인의 유형을 다음과 같이 매개변수화하여 다음의 트레이트를 정의할 수 있다.</p>
+
+<p>``` scala
+import scala.language.higherKinds
+trait PayrollProcessor[C[_], A] {</p>
+
+<pre><code>def processPayroll(payees: Seq[A]): Either[String, Throwable]
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>C</code>는 급여명세 유형을 나타내는 고차 존재(higher-kinded) 타입이다. 고차 존재 타입인 이유는 <code>USPayroll</code>과 <code>CanadaPayroll</code> 둘 다 타입 매개변수를 취하기 때문이다. <code>A</code>는 피지불인 유형을 나타내는 타입이다. 팬텀 타입(phamtom type)처럼 매개변수화된 타입을 제외하고는 <code>C</code>를 사용하지 않는다는 것을 주목하라. 타입 클래스의 두 번째 빌딩블럭인 <code>PayrollProcessor</code> 트레이트의 임플리시트(implicit, 이하 임플리시트) 정의는 다음과 같다.</p>
+
+<p>``` scala
+case class Employee(name: String, id: Long)
+implicit object USPayrollProcessor extends PayrollProcessor[USPayroll, Employee] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Employee]) = Left("us employees are processed")
+</code></pre>
+
+<p>}</p>
+
+<p>implicit object CanadaPayrollProcessor extends PayrollProcessor[CanadaPayroll, Employee] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Employee]) = Left("canada employees are processed")
+</code></pre>
+
+<p>}
+```</p>
+
+<p>국가에 따라 적절한 <code>PayrollProcessor</code>의 정의를 식별하기 위해 <code>PayrollProcessor</code>의 첫번째 타입 매개변수를 어떻게 사용하는지 살펴보자. 임플리시트 정의를 가져다 쓸려면, <code>USPayroll</code> 과 <code>CanadaPayroll</code> 타입에 모두에 대해 임플리시트 클래스 매개변수를  다음과 같이 정의해야 한다.</p>
+
+<p>``` scala
+case class USPayroll<a href="payees:%20Seq[A]">A</a>(implicit processor: PayrollProcessor[USPayroll, A]) {</p>
+
+<pre><code>def processPayroll = processor.processPayroll(payees)
+</code></pre>
+
+<p>}
+case class CanadaPayroll<a href="payees:%20Seq[A]">A</a>(implicit processor: PayrollProcessor[CanadaPayroll, A]) {</p>
+
+<pre><code>def processPayroll = processor.processPayroll(payees)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이제 <code>USPayroll</code>과 <code>CanadaPayroll</code> 인스턴스를 만들면, Scala 컴파일러가 임플리시트 매개변수에 대한 값을 공급한다. 지금까지의 소스는 다음과 같다.</p>
+
+<p>``` scala
+package chap08.payroll.typeclass
+import scala.langage.higherkinds</p>
+
+<p>object PayrollSystemWithTypeclass {</p>
+
+<pre><code>case class Employee(name: String, id: Long)
+
+trait PayrollProcessor[C[_], A] {
+    def processPayroll(payees: Seq[A]): Either[String, Throwable]
+}
+
+case class USPayroll[A](payees: Seq[A])(implicit processor: PayrollProcessor[USPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+
+case class CanadaPayroll[A](payees: Seq[A])(implicit processor: PayrollProcessor[CanadaPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+</code></pre>
+
+<p>}</p>
+
+<p>object PayrollProcessors {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+
+implicit object USPayrollProcessor extends PayrollProcessor[USPayroll, Employee] {
+    def processPayroll(payees: Seq[Employee]) = Left("us employees are processed")
+}
+
+implicit object CanadaPayrollProcessor extends PayrollProcessor[CanadaPayroll, Employee] {
+    payees: Seq[Employee]) = Left("canada employees are processed")
+}
+</code></pre>
+
+<p>}</p>
+
+<p>object RunPayroll {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+import PayrollProcessors._
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val r = USPayroll(Vector(Employee("a", a))).processPayroll
+    println(r)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>모든 임플리시트 정의들은 함께 그룹화되어, <code>RunPayroll</code> 객체 안으로, 임포트될 수 있게 거들고 있다. 직원 콜렉션을 제공하는 <code>USPayroll</code>를 인스턴스화할 때 임플리시트 프로세서가 공급됨을 주목하라. 이 경우에는 <code>USPayrollProcessor</code>가 이에 해당한다.</p>
+
+<p>이제 타입 안정성(type satefy)도 지녔는지 검증해보자. <code>Contractor</code>라 불리는 새 타입을 만들자.</p>
+
+<p><code>scala
+case class Contractor(name: String)
+</code></p>
+
+<p>피지불인 유형에 대한 제약사항이 없기 때문에, 쉽게 계약자 콜렉션을 만들어 <code>USPayroll</code>에 전달할 수 있다.</p>
+
+<p><code>scala
+USPayroll(Vector(Contractor("a"))).processPayroll
+</code></p>
+
+<p>그러나 위 라인을 컴파일하는 순간, 컴파일 에러가 발생한다. 왜냐하면 아직 <code>USPayroll</code> 과 <code>Contractor</code>에 대한 암묵적인 정의가 없기 때문이다.</p>
+
+<p>현재 구성에서 새 타입을 추가하는 것은 매우 쉽다. 새 클래스를 추가해서 급여명세 프로세서에 임플리시트를 정의하면 된다.</p>
+
+<p>``` scala
+object PayrollSystemWithTypeclassExtension {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+case class JapanPayroll[A](payees: Vector[A])(implicit processor: PayrollProcessor[JapanPayroll, A]) {
+    def processPayroll = processor.processPayroll(payees)
+}
+
+case class Contractor(name: String)
+</code></pre>
+
+<p>}</p>
+
+<p>object PayrollProcessorsExtension {</p>
+
+<pre><code>import PayrollSystemWithTypeclassExtension._
+import PayrollSystemWithTypeclass._
+
+implicit object JapanPayrollProcessor extends PayrollProcessor[JapanPayroll, Employee] {
+    def processPayroll(payees: Seq[Employee]) = Left("japan employees are processed")
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>계약자 B에 대한 급여를 지불하는 새 연산도 매우 간단하다. 아래와 같이 계약자에 대한 임플리시트를 정의하면 된다.</p>
+
+<p>``` scala
+implicit object USContractorPayrollProcessor extends PayrollProcessor[USPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("us contractors are processed")
+</code></pre>
+
+<p>}
+implicit object CanadaContractorPayrollProcessor extends PayrollProcessor[CanadaPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("canada contractors are processed")
+</code></pre>
+
+<p>}
+implicit object JapanContractorPayrollProcessor extends PayrollProcessor[JapanPayroll, Contractor] {</p>
+
+<pre><code>def processPayroll(payees: Seq[Contractor]) = Left("japan contractors are processed")
+</code></pre>
+
+<p>}
+```</p>
+
+<p>위의 임플리시트 정의들을 <code>PayrollProcessorsExtension</code> 객체 안에 추가하면, 모두를 함께 그룹지을 수 있다. 다음의 코드 조각은 직원과 계약자 모두의 급여를 지불하기 위한 코드를 어떻게 사용하지는 보여주고 있다.</p>
+
+<p>``` scala
+object RunNewPayroll {</p>
+
+<pre><code>import PayrollSystemWithTypeclass._
+import PayrollProcessors._
+import PayrollSystemWithTypeclassExtension._
+import PayrollProcessorsExtension._
+
+def main(args: Array[String]): Unit = run
+def run = {
+    val r1 = JapanPayroll(Vector(Employee("a", 1))).processPayroll
+    val r2 = JapanPayroll(Vector(Contractor("a"))).processPayroll
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>보다시피 필요한 클래스와 임플리시트 정의를 모두 임포트해서 일본에 대해 급여를 처리하고 있다. 이번에는 함수형 프로그래밍 기술을 사용하여 Expression problem을 거듭 성공적으로 풀었다. 자바 프로그래머들은 타입 클래스에 익숙해지는데에 다소 시간이 걸릴지도 모르지만, 한번 익숙해지게 되면 변경에 재빠르게 반응하는 소급 모델(retroactive model)의 파워를 갖추게 될 것이다.</p>
+
+<h3>나가며</h3>
+
+<p>Scala in Action의 8장에서는 Scala의 재사용성과 확장성을 보여주기 위해 Expression problem을 실무 사례와 비슷한 급여명세 시스템에 적용하며 객체지향 프로그래밍(OOP)과 함수형 프로그래밍(FP) 스타일의 해법을 제시하고 있다. OOP에서는 추상 멤버 타입과 트레이트 결합을, FP에서는 팬텀 타입(Phantom Type)과 임플리시트(implicit)를 사용하고 있다. 개인적으로는 아무래도 OOP 스타일이 더 익숙하지만, 임플리시트로 팬텀 타입(Phantom Type)에서 사용하는 타입을 준비하고 타입 매개변수에서 필요한 특정 타입을 지정하면 나머지는 컴파일러가 알아서 처리하는 FP 스타일의 간결함과 유연함이 좀 더 좋아보인다.</p>
+
+<h3>더 읽을거리</h3>
+
+<ul>
+<li><a href="http://www.slideshare.net/maedaunderscore/phatom-type-14612078">Phantom Type in Scala (Japanese, 2013)</a></li>
+<li><a href="http://docs.scala-lang.org/overviews/core/architecture-of-scala-collections.html">The Architecture of Scala Collections</a></li>
+<li><a href="http://stackoverflow.com/questions/7860163/what-are-some-compelling-use-cases-for-dependent-method-types">What are some compelling use cases for dependent method types?</a></li>
+<li><a href="http://ropas.snu.ac.kr/~bruno/papers/TypeClasses.pdf">Type Classes as Objects and Implicits (2010)</a></li>
+<li><a href="http://808fabrik.com/scala/functor-monad-in-scala-handout.pdf">From Functor to Monad (2013.02)</a></li>
+<li><a href="http://tmorris.net/posts/functors-and-things-using-scala/index.html">Functors and things using Scala (2013.03)</a></li>
+<li><a href="http://apocalisp.wordpress.com/2010/06/08/type-level-programming-in-scala/">Type-Level Programming (2010.06)</a></li>
+<li><a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.117.695">On understanding types, data abstraction, and polymorphism (1985)</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

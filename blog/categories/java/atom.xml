@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Java | Patrick Yoon]]></title>
+  <link href="http://cluno.github.io/blog/categories/java/atom.xml" rel="self"/>
+  <link href="http://cluno.github.io/"/>
+  <updated>2014-03-21T22:38:45+09:00</updated>
+  <id>http://cluno.github.io/</id>
+  <author>
+    <name><![CDATA[Patrick Yoon]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[한글 초성 검색]]></title>
+    <link href="http://cluno.github.io/blog/2013/09/20/searching-initial-consonant/"/>
+    <updated>2013-09-20T19:45:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/09/20/searching-initial-consonant</id>
+    <content type="html"><![CDATA[<p>한글 초성 검색 모듈을 만들어보자.</p>
+
+<!-- more -->
+
+
+<p>검색 조건은 다음과 같다.</p>
+
+<ul>
+<li>검색어는 최소 두 자리 이상 입력</li>
+<li>검색 결과는 매출이 가장 많은 순으로 정렬</li>
+</ul>
+
+
+<h3>시퀀스 다이어그램</h3>
+
+<p>아래는 전체 로직의 시퀀스 다이어그램이다. 보다시피, 검색 키워드와  도서명 초성 캐릭터 배열과 매칭 여부를 판별하고, 매칭될 경우 그 결과를 도서명 리스트로 반환한다.</p>
+
+<p><img src="http://www.websequencediagrams.com/cgi-bin/cdraw?lz=TWV0aG9kcyBTZXF1ZW5jZQoKc2VhcmNoKCktPmRvUwAFBzoga2V5d29yZApub3RlIGxlZnQgb2YgABUM7JiIKSAn44WC44S5J-uhnCDqsoDsg4kg7Iuc7J6RCgBCCi0-aXNNYXQAUQZib29rLnRpdGxlLABaCQAWCS0-aW5pdGlhbENvbnNvbmFudCgpOiAAKQUAgQIGcmlnaACBBAUARwvrj4TshJzrqoXsl5DshJwg7LSI7ISxIOyDieyduCDstpTstpwKAEYSAIEJDWNoYXJbXQB9DACBfwx0cnVlIG9yIGZhbHNlAIFMDQCCMwg6IExpc3Q8Qm9vaz4gb3IgbnVsbACCTQtwcmkAgUUG6rKw6rO8IOy2nOugpQ&amp;s=rose" alt="" /></p>
+
+<h3>초성 배열</h3>
+
+<p>한글 소리 마디 (Hangul Syllables)에는 현대 한글에서 표현 가능한 11,172자를 모두 포함하고 있는데, 그 범위는 &lsquo;가&rsquo;(U+AC00)부터 &lsquo;힣&rsquo;(U+D7A3)까지이다. 그리고 초성은 19개, 중성은 21개, 종성은 28개로 이루어져 있다. 따라서, 한글 음절의 코드표로부터 시작 값인 U+AC00을 빼고, 이 값으로부터 (28x21)의 나눈 몫이 초성이 된다. (이상, <a href="http://helloworld.naver.com/helloworld/76650">참고</a>)</p>
+
+<p><code>
+초성 인덱스 : (한글 코드값 - 0xAC00) / (28*21)
+</code></p>
+
+<p>구현하는 방법은 여러가지가 있겠지만 중성과 종성을 검색에서 제외시키고, 초성  캐릭터 배열만 구해서 검색어와 매칭하는 방법이 제일 간단하다. 다음은 주어진 문자열에서 초성 배열을 반환하는 메소드이다.</p>
+
+<p>``` java
+/<em>*
+* 주어진 문자열 전체에 해당하는 초성 캐릭터 배열을 반환한다.
+* 예, 도서명이 &ldquo;돈데 기리기리 돈데크만- Season[1]"의 경우, &lsquo;ㄷㄷㄱㄹㄱㄹㄷㄷㅋㅁ&rsquo;.
+*
+* @param title 주어진 문자열
+* @return 초성 캐릭터 배열
+</em>/
+private char[] initialConsonant(String str) {</p>
+
+<pre><code>// Guava의 CharMatcher를 이용해 문자열로부터 한글만 추출한다.
+String hangul = CharMatcher.inRange(0xAC00, 0xD79F).retainFrom(str);
+
+int len = hangul.length(); // 추출된 한글의 길이를 구한다. 
+char result[] = new char[len]; // 한글 길이만큼의 캐릭터 배열을 생성한다.
+
+for(int i = 0; i != len; i++) {
+    char word = hangul.charAt(i);
+    int index = (word - 0xAC00)  / (28 * 21);
+    result[i] = INITIALS[index];
+}
+
+return result;
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>검색 키워드 매칭</h3>
+
+<p>매칭 여부는 초성 캐릭터 배열과 검색어 캐릭터 배열를 비교한다.</p>
+
+<p>``` java
+/<em>*
+* 주어진 문자열과 주어진 검색 키워드가 매칭하는지의 여부를 반환한다.
+*
+* @param title 문자열
+* @param keyword 검색 키워드
+* @return 매칭 여부
+</em>/
+private boolean isMatch(String title, String keyword) {
+  char[] initials = initialConsonant(title);  // 도서명의 초성 캐릭터 배열을 반환
+  char[] keys = keyword.toCharArray();    // 검색 키워드를 캐릭터 배열로 반환</p>
+
+<p>  if(keys.length == 0 || keys.length &lt; 2) { // 검색 키워드 유효성 체크</p>
+
+<pre><code>return false;
+</code></pre>
+
+<p>  }</p>
+
+<p>  int len = initials.length &ndash; keys.length; // 키워드의 길이만큼만 매칭
+  int offset = 0;
+  for(int i = 0; i &lt;= len; i++) {</p>
+
+<pre><code>for(int j = offset; j &lt; keys.length; j++) {
+  // 초성 캐릭터 배열과 검색어 캐릭터 배열의 값을 하나씩 비교함
+  if(initials[i + offset] == keys[j]) {
+    offset++;     // 매칭될 경우 오프셋의 위치를 증가
+  } else {
+    offset = 0;   // 매칭되지 않으면, 오프셋의 위치를 초기화
+    break;
+  }
+}
+</code></pre>
+
+<p>  }</p>
+
+<p>  // 매칭된 개수와 키워드의 길이가 같을 경우, 매칭하는 것으로 판별
+  return offset == keys.length;
+}</p>
+
+<p>```</p>
+
+<h3>전체 코드</h3>
+
+<p>이상 전체 코드는 다음과 같다. 편의상 Guava 라이브러리를 사용하였다. 입력 데이터는 data.csv 파일로 받는다.</p>
+
+<p>``` java
+import java.io.File;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;</p>
+
+<p>import com.google.common.base.CharMatcher;
+import com.google.common.base.Charsets;
+import com.google.common.base.Splitter;
+import com.google.common.collect.Lists;
+import com.google.common.io.Files;</p>
+
+<p>public class SimpleSearcher {
+  private static final char INITIALS[] = &ldquo;ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ&rdquo;.toCharArray();</p>
+
+<p>  private List<Book> books = Lists.newArrayList();</p>
+
+<p>  public SimpleSearcher() throws Exception {</p>
+
+<pre><code>loadItems(); // data.csv 파일로부터 도서 데이터를 읽어온다.
+</code></pre>
+
+<p>  }</p>
+
+<p>  public void search(String keyword) {</p>
+
+<pre><code>print(doSearch(keyword));
+</code></pre>
+
+<p>  }</p>
+
+<p>  private List<Book> doSearch(String keyword) {</p>
+
+<pre><code>List&lt;Book&gt; matched = Lists.newArrayList();
+
+for(Book book: books) {
+  if(isMatch(book.title, keyword)) {
+    matched.add(book);
+  }
+}
+
+// 판매량을 기준으로 정렬한다.
+Collections.sort(matched, new Comparator&lt;Book&gt;() {
+  @Override public int compare(Book a, Book b) {
+    int p1 = a.getTotal();
+    int p2 = b.getTotal();
+
+    if(p1 == p2) return 0;
+
+    return p1 &gt; p2 ? -1 : 1;
+  }
+});
+
+return matched;
+</code></pre>
+
+<p>  }</p>
+
+<p>  /<em>*
+   * 주어진 문자열과 주어진 검색 키워드가 매칭하는지의 여부를 반환한다.
+   *
+   * @param title 문자열
+   * @param keyword 검색 키워드
+   * @return 매칭 여부
+   </em>/
+  private boolean isMatch(String title, String keyword) {</p>
+
+<pre><code>char[] initials = initialConsonant(title);  // 도서명의 초성 캐릭터 배열을 반환
+char[] keys = keyword.toCharArray();    // 검색 키워드를 캐릭터 배열로 반환
+
+if(keys.length == 0 || keys.length &lt; 2) { // 검색 키워드 유효성 체크
+  return false;
+}
+
+int len = initials.length - keys.length; // 키워드의 길이만큼만 매칭
+int offset = 0;
+for(int i = 0; i &lt;= len; i++) {
+  for(int j = offset; j &lt; keys.length; j++) {
+    // 초성 캐릭터 배열과 검색어 캐릭터 배열의 값을 하나씩 비교함
+    if(initials[i + offset] == keys[j]) {
+      offset++;     // 매칭될 경우 오프셋의 위치를 증가
+    } else {
+      offset = 0;   // 매칭되지 않으면, 오프셋의 위치를 초기화
+      break;
+    }
+  }
+}
+
+// 매칭된 개수와 키워드의 길이가 같을 경우, 매칭하는 것으로 판별
+return offset == keys.length;
+</code></pre>
+
+<p>  }</p>
+
+<p>  /<em>*
+   * 주어진 문자열 전체에 해당하는 초성 캐릭터 배열(색인)을 반환한다.
+   * 예, 도서명이 &ldquo;돈데 기리기리 돈데크만- Season[1]"의 경우, &lsquo;ㄷㄷㄱㄹㄱㄹㄷㄷㅋㅁ&rsquo;.
+   *
+   * @param title 주어진 문자열
+   * @return 초성 캐릭터 배열
+   </em>/
+  private char[] initialConsonant(String str) {</p>
+
+<pre><code>// Guava의 CharMatcher를 이용해 문자열로부터 한글만 추출한다.
+String hangul = CharMatcher.inRange(0xAC00, 0xD79F).retainFrom(str);
+
+int len = hangul.length(); // 추출된 한글의 길이를 구한다. 
+char result[] = new char[len]; // 한글 길이만큼의 캐릭터 배열을 생성한다.
+
+for(int i = 0; i != len; i++) {
+  char word = hangul.charAt(i);
+  int index = (word - 0xAC00)  / (28 * 21); 
+  result[i] = INITIALS[index];
+}
+
+return result;
+</code></pre>
+
+<p>  }</p>
+
+<p>  private void print(List<Book> books){</p>
+
+<pre><code>for(Book book: books) {
+  System.out.println("도서명:" + book.title + " 가격: " + book.getTotal());
+}
+</code></pre>
+
+<p>  }</p>
+
+<p>  /<em>*
+   * 파일(data.csv)에서 도서정보를 읽어온다.
+   * 별도의 오류처리를 하지 않고 메인쓰레드로 날린다.
+   *
+   * @throws Exception 파일입출력 오류
+   </em>/
+  private void loadItems() throws Exception {</p>
+
+<pre><code>final List&lt;String&gt; lines = Files.readLines(new File("data.csv"), Charsets.UTF_8);
+Splitter splitter = Splitter.on(',').omitEmptyStrings().trimResults();
+
+for (String line : lines) {
+  if(line.trim().length() == 0) continue;
+
+  Iterable&lt;String&gt; spliter = splitter.split(line);
+  List&lt;String&gt; v = Lists.newArrayList(spliter);
+
+  Book book = new Book();
+  book.id = v.get(0);
+  book.title = v.get(1);
+  book.price = Integer.parseInt(v.get(2));
+  book.sales = Integer.parseInt(v.get(3));
+
+  books.add(book);
+}
+</code></pre>
+
+<p>  }</p>
+
+<p>  public static void main(String&hellip; args) throws Exception {</p>
+
+<pre><code>SimpleSearcher app = new SimpleSearcher();
+app.search("ㄷㄷㅋ");
+</code></pre>
+
+<p>  }</p>
+
+<p>  class Book {</p>
+
+<pre><code>String id;
+String title;
+int price;
+int sales;
+
+public int getTotal() {
+  if(sales == 0) return 0;
+  return price * sales;
+}
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>```</p>
+]]></content>
+  </entry>
+  
+</feed>

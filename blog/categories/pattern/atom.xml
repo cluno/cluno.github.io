@@ -1,0 +1,677 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Pattern | Patrick Yoon]]></title>
+  <link href="http://cluno.github.io/blog/categories/pattern/atom.xml" rel="self"/>
+  <link href="http://cluno.github.io/"/>
+  <updated>2014-03-21T22:38:45+09:00</updated>
+  <id>http://cluno.github.io/</id>
+  <author>
+    <name><![CDATA[Patrick Yoon]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Programming in Scala 15장]]></title>
+    <link href="http://cluno.github.io/blog/2013/03/26/programming-in-scala-15-jang/"/>
+    <updated>2013-03-26T07:23:00+09:00</updated>
+    <id>http://cluno.github.io/blog/2013/03/26/programming-in-scala-15-jang</id>
+    <content type="html"><![CDATA[<p>Scala는 돌아서면 잊어버려 15장부터는 노트합니다. 편의상 음슴체로 갑니다.</p>
+
+<!-- more -->
+
+
+<h1>15 Case Classes and Pattern Matching</h1>
+
+<h2>15.1 A simple example</h2>
+
+<p>산술 연산을 위한  <code>case</code> 클래스 정의는 다음과 같음.</p>
+
+<p><code>scala
+abstract class Expr
+case class Var(name: String) extends Expr
+case class Number(name: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+</code></p>
+
+<h3>Case classes</h3>
+
+<p>클래스명과 동일한 factory 메소드가 추가됨</p>
+
+<p><code>scala
+val v = Var("x")
+val op = BinOp("+", Number(1), v)   
+</code></p>
+
+<p>클래스 매개변수 리스트의 모든 인자는 (암묵적으로) <code>val</code> prefix를 가지기 때문에 멤버변수가 됨.</p>
+
+<p><code>scala
+v.name
+op.left
+</code></p>
+
+<p>컴파일러가 알아서 <code>toString</code>, <code>hashCod</code>, <code>equals</code> 를 구현함 (참고, Scala 에서는 == 가 equals 를 대신함)</p>
+
+<p><code>scala
+println(op)
+op.right == Var("x")
+</code></p>
+
+<p>다른 복사본을 만들어주는 <code>copy</code> 메소드가 추가됨</p>
+
+<p><code>scala
+op.copy(operator = "-") // BinOp(-, Number(1.0), Var(x))
+</code></p>
+
+<h3>Pattern Matching</h3>
+
+<p>패턴매칭을 이용한 몇 가지 산술식의 단순화 (예. 이중부정, 0 더하기, 1 곱하기)</p>
+
+<p>``` scala
+def simplifyTop(expr: Expr) : Expr = expr match {</p>
+
+<pre><code>case UnOp("-", UnOp("-", e)) =&gt;  e  
+case BinOp("+", e, Number(0)) =&gt; e  
+case BinOp("*", e, Number(1)) =&gt; e
+case _ =&gt; expr
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>switch</code>문과 유사한 <code>match</code>표현식</p>
+
+<p><code>scala
+selector match { alternatives }
+  switch (selector) { alternatives }
+</code></p>
+
+<ul>
+<li><code>match</code> 는 결과를 수반하는 표현식</li>
+<li>alternative 표현식, 즉 패턴은 다음 <code>case</code>로 떨어지지(fall-though) 않음</li>
+<li>하나라도 매칭되지 않으면 <code>MatchError</code> 예외 발생.</li>
+</ul>
+
+
+<p>기본 공백 <code>case</code>의 패턴 매칭 (<code>Unit</code>값을 반환,  <code>MatchError</code>를 피하기 위한 꼼수)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp(op, left, right) =&gt;
+    println(expr + " is a binary operation")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.2 Kinds of patterns</h2>
+
+<h3>Wildcard Patterns</h3>
+
+<p>이항연산의 요소와 무관한 와일드카드 패턴</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp(_, _, _) =&gt; println(expr + " is a binary operation")
+case _ =&gt; println("It's something else")
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Constant patterns</h3>
+
+<p>literal을 상수값으로 사용하는 패턴</p>
+
+<p>``` scala
+def describe(x: Any) = x match {</p>
+
+<pre><code>case 5 =&gt; "five"
+case true =&gt; "truth"
+case "hello" =&gt; "hi!"
+case Nil =&gt; "the empty list"
+case _ =&gt; "something else"
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Variable patterns</h3>
+
+<p>임의의 변수를 이용하는 패턴 (와일드카드 패턴과 달리 <code>Object</code>에만 한정)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case 0 =&gt; "zero"
+case somethingElse =&gt; "not zero: " + somethingElse
+</code></pre>
+
+<p>}
+```</p>
+
+<p>변수와 상수의 구분: 소문자로 시작할 경우에만 패턴 변수로, 그렇지 않으면 상수로 취함</p>
+
+<p>``` scala
+E match {</p>
+
+<pre><code>case Pi =&gt; "strange math? Pi = " + Pi
+case _ =&gt; "OK"
+</code></pre>
+
+<p>} // OK에 매칭</p>
+
+<p>E match {</p>
+
+<pre><code>case pi =&gt; "strange math? Pi = " + Pi 
+</code></pre>
+
+<p>} // pi에 매칭
+```</p>
+
+<p><code>pi</code>는 변수이므로 모든 input과 매칭. 수식어를 붙여주거나 back-tick 문법을 사용</p>
+
+<p>``` scala
+E match {</p>
+
+<pre><code>case `pi` =&gt; "strange math? Pi = " + pi
+case _ =&gt; "OK"
+</code></pre>
+
+<p>} // OK에 매칭
+```</p>
+
+<h3>Constructor patterns</h3>
+
+<p>생성자의 이름과 extra 패턴으로 생성자 매개변수를 확인. (deep match: 상위 레벨의 객체도 확인하고 이후 패턴에 대해 그 객체의 내용물도 확인하는 패턴)</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case BinOp("+", e, Number(0)) =&gt; println("a deep match")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Sequence patterns</h3>
+
+<p>고정 길이 매칭</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case List(0, _, _) =&gt; println("found it")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>임의 길이 매칭</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case List(0, _*) =&gt; println("found it")
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Tuple patterns</h3>
+
+<p>``` scala
+def tupleDemo(expr: Any) =</p>
+
+<pre><code>expr match {
+    case (a, b, c) =&gt; println("matched " + a + b + c)
+    case _=&gt;
+}
+</code></pre>
+
+<p>```</p>
+
+<h3>Typed patterns</h3>
+
+<p>타입 테스트/캐스팅을 위한 매칭</p>
+
+<p>``` scala
+def generalSize(x: Any) = x match {</p>
+
+<pre><code>case s: String =&gt; s.length      // generalSize("abc")
+case m: Map[_, _] =&gt; m.size     // generalSize(Map( 1 -&gt; '2', 2 -&gt; 'b'))
+case _ =&gt; -1                    // generalSize(math.Pi)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>타입 테스트/캐스팅용 <code>Any</code> 클래스에 <code>isInstanceOf</code>와 <code>asInstanceOf</code> 메소드가 있으나 패턴매칭을 권장</p>
+
+<p><strong>타입 소거(type erasure)</strong> &ndash; Scala도 런타임시 타입 정보를 모름 (단, <code>Array</code>는 예외)</p>
+
+<h3>Variable binding</h3>
+
+<p>변수가 바인딩된 패턴 &ndash; 매칭되는 패턴이 변수로 반환됨</p>
+
+<p>``` scala
+expr match {</p>
+
+<pre><code>case UnOp("abs", e @ UnOp("abs", _)) =&gt; e   // 변수 이름, @, 패턴
+case _ =&gt;
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.3 Pattern guards</h2>
+
+<p>Scala에서는 패턴이 선형적(linear), 패턴의 변수는 패턴 내에 한번만 쓰임.</p>
+
+<p>``` scala
+def simplifyAdd(e: Expr) = e match {</p>
+
+<pre><code>case BinOp("+", x, x) =&gt; BinOp("*", x, Number(2))   // error: x is already defined as value x
+case _ =&gt; e
+</code></pre>
+
+<p>}
+```</p>
+
+<p>패턴 가드 (임의의 boolean 표현식), 가드 표현식이 참일 경우만 매칭됨</p>
+
+<p>``` scala
+def simplifyAdd(e: Expr) = e match {</p>
+
+<pre><code>case BinOp("+", x, y) if x == y =&gt;
+    BinOp("*", x, Number(2))
+case _ =&gt; e
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.4 Pattern overlaps</h2>
+
+<p>구체적인 패턴을 먼저 기술하고 일반적인 패턴을 기술하는 식으로 오버래핑</p>
+
+<p>``` scala
+def simplifyTop(expr: Expr) : Expr = expr match {</p>
+
+<pre><code>case UnOp("-", UnOp("-", e)) =&gt;  e  
+case BinOp("+", e, Number(0)) =&gt; e  
+case BinOp("*", e, Number(1)) =&gt; e
+case UnOp(op, e) =&gt; 
+    UnOp(op, simplifyAll(e))
+case BinOp(op, l, r) =&gt;
+    BinOp(op, simplifyAll(l), simplifyAll(r))
+case _ =&gt; expr
+</code></pre>
+
+<p>}
+```</p>
+
+<p>그렇지 않으면 컴파일 에러</p>
+
+<p>``` scala
+def simplifyBad(expr: Expr): Expr = expr match {</p>
+
+<pre><code>case UnOp(op, e) =&gt; UnOp(op, simplifyBad(e))
+case UnOp("-", UnOp("-", e)) =&gt; e           // error: unreachable code
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>15.5 Sealed classes</h2>
+
+<p><code>sealed</code> 키워드로 부모 클래스를 봉인하면 미리 정의된 하위 case 클래스의 계층 구조를 부모 클래스의 기본 패턴 조합으로 설정.</p>
+
+<p>봉인 &ndash; 런타임시 생성되는 하위 case 클래스의 추가를 막음 (단, 같은 파일에 있는 것들은 예외)</p>
+
+<p>``` scala
+sealed abstract class Expr</p>
+
+<pre><code>case class Var(name: String) extends Expr
+case class Number(name: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+</code></pre>
+
+<p>```</p>
+
+<p>기본 패턴 조합이 아닌 경우, 컴파일 경고가 발생 (match is not exhaustive!)</p>
+
+<p>``` scala
+def describe(e: Expr): String = e match {</p>
+
+<pre><code>case Number(_) =&gt; "a number"
+case Var(_) =&gt; "a variable"
+</code></pre>
+
+<p>}
+```</p>
+
+<p>컴파일 경고를 피할려면, <code>RuntimeException</code>을 던지거나 <code>@unchecked</code> 주석을 활용</p>
+
+<h2>15.6 The Option type</h2>
+
+<p>Option 타입 &ndash; Some(x) 형태이거나 혹은 None 값의 형태. Collection에 의해 생성</p>
+
+<p>``` scala
+val capitals = Map(&ldquo;France&rdquo; &ndash;> &ldquo;Paris&rdquo;, &ldquo;Japan&rdquo; &ndash;> &ldquo;Tokyo&rdquo;)</p>
+
+<pre><code>capitals get "France"       // Some(Paris)
+capitals get "North Pole"   // None
+</code></pre>
+
+<p>```</p>
+
+<p>일반적으로 패턴 매칭에서 선택적인 값을 가져올 때 사용</p>
+
+<p>``` scala
+def show(x: Option[String]) = x match {</p>
+
+<pre><code>case Some(s) =&gt; s
+case None =&gt; "?"
+</code></pre>
+
+<p>}</p>
+
+<p>show(capitals get &ldquo;Japan&rdquo;)          // Tokyo
+show(capitals get &ldquo;North Pole&rdquo;      // ?
+```</p>
+
+<p>Java의 경우 <code>HashMap</code>은 값을 찾지 못하면 <code>null</code>을 반환하는데 오류에 취약함. Java에서는 <code>null</code> 확인을 잊어버려  <code>NullPointerException</code>이 매우 빈번하게 발생함.</p>
+
+<p>Scala에서는 이런 게 안 통함, 왜냐하면 해쉬맵은 value 타입만 저장할 수 있으며 <code>null</code>은 value 타입으로 허용되지 않음.</p>
+
+<h2>15.7 Patterns everywhere</h2>
+
+<h3>Patterns in variable definitions</h3>
+
+<p>단일 할당으로 다중 변수 정의</p>
+
+<p><code>scala
+val myTuple = (123, "abc")      // myTuple: (Int, java.lang.String) = (123, abc)
+val (number, string) = myTuple  // number: Int = 123, string: java.langString =  abc
+</code></p>
+
+<p><code>case</code> 클래스 작업에 유용 &ndash; 정확한 <code>case</code> 클래스를 알고 있을 경우, 패턴으로 해체할 수 있음.</p>
+
+<p><code>scala
+val exp = new BinOp("*", Number(5), Number(1))
+val BinOp(op, left, right) = exp    // op: String =  *, left: Expr = Number(5.0), right: Expr = (Number1.0)
+</code></p>
+
+<h3>Case sequences as partial functions</h3>
+
+<p><code>case</code> 시퀀스는 함수 리터럴임 &ndash; 함수 리터럴을 쓰는 곳엔 <code>case</code> 시퀀스를 쓸 수 있음.</p>
+
+<p>아래 함수는 두 가지 case로 구성.</p>
+
+<p>``` scala
+val withDefault: Option[Int] => Int = {</p>
+
+<pre><code>case Some(x) =&gt; x
+case None =&gt; 0
+</code></pre>
+
+<p>}</p>
+
+<pre><code>withDefault(Some(10))   // Int = 10
+withDefault(None)       // Int = 0
+</code></pre>
+
+<p>```</p>
+
+<p>전형적인 Actor 코드에도 유용</p>
+
+<p>``` scala
+react {</p>
+
+<pre><code>case (name: String, actor: Actor) =&gt; {
+    actor ! getip(name)
+    act()
+}
+
+case msg =&gt; {
+    println("Unhandled message: " + msg)
+    act()
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>case</code> 시퀀스는 partial 함수를 제공 &ndash; 아래 예제는 정수형 리스트의 두 번째 요소를 반환하는 partial 함수.</p>
+
+<p>``` scala
+val second: List[Int] => Int = {</p>
+
+<pre><code>case x :: y :: _ =&gt; y           // 컴파일시 Nil 조합이 없다는 warning
+</code></pre>
+
+<p>}</p>
+
+<p>second(List(5, 6, 7))       // Int = 6
+second(List())              // MatchError
+```</p>
+
+<p><code>PartialFunction</code> 타입으로 다시 작성하면</p>
+
+<p>``` scala
+val second: PartialFunction[List[Int],Int] = {</p>
+
+<pre><code>case x :: y :: _ =&gt; y
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Partial 함수는 여러 개의 entry point를 제공. 이를 위한 <code>isDefinedAt</code> 메소드가 있음 &ndash; 함수가 특정한 값(entry point)에 정의되어 있는지를 테스트함.</p>
+
+<p><code>scala
+second.isDefinedAt(List(5, 6, 7)    // true
+second.isDefinedAt(List())          // false
+</code></p>
+
+<p>함수 리터럴 <code>{ case x :: y :: _=&gt; y }</code> 는 컴파일러에 의해 다음의 partial 함수로 변환됨.</p>
+
+<p>``` scala
+new PartialFunction[List[Int], Int] {</p>
+
+<pre><code>def apply(xs: List[Int]) = xs match {
+    case x :: y :: _ =&gt; y
+}
+
+def isDefinedAt(xs: List[Int]) = xs match {
+    case x :: y :: _ =&gt; true
+    case _ =&gt; false
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>가능한 완전한(complete) 함수로 작업. 왜냐하면 partial 함수를 사용하면 컴파일가 처리 못하는 런타임 에러를 허용하게 됨. 그러나 다룰  수 없는 값의 입력을 원치 않을 때 partial 함수를 사용하거나 혹은 partial 함수를 요구하는 프레임워크에서 그 함수를 호출하기 전에 isDefinedAt 메소드로 확인할 수 있음.</p>
+
+<h3>Patterns in for expressions</h3>
+
+<p>tuple 패턴으로 쓰인 <code>for</code> 표현식</p>
+
+<p><code>scala
+for((country, city) &lt;- capitals)
+</code></p>
+
+<p>패턴과 매칭되는 리스트 요소 뽑아내기</p>
+
+<p><code>scala
+val results = List(Some("apple"), None, Some("orange"))
+for(Some(fruit) &lt;- results) println(fruit) // apple orange
+</code></p>
+
+<h2>15.8 A Larger Example</h2>
+
+<p>x/(x+1)의 표현식을 다음과 같이 형태로 출력하는 <code>ExprFormatter</code>라는 클래스를 만들어 봄.</p>
+
+<pre><code>  x
+-----
+x + 1
+</code></pre>
+
+<p>수평 레이아웃의 경우, 아래와 같은 구조의 표현은 ( x + y ) * z + 1을 출력해야 함.</p>
+
+<p>``` scala
+BinOp(&ldquo;+&rdquo;,
+BinOp(&ldquo;*&rdquo;,
+BinOp(&ldquo;+&rdquo;, Var(&ldquo;x&rdquo;), Var(&ldquo;y&rdquo;)),</p>
+
+<pre><code>Var("z")),
+Number(1))
+</code></pre>
+
+<p>```</p>
+
+<p>레이아웃을 쉽게 읽으려면 중복 괄호는 제거해야함.
+괄호의 어디에다 두어야할지 알기 위해선 우선순위를 알아야함. 우선순위는 map 리터럴로 다음과 같이 표현할 수 있음.</p>
+
+<p>``` scala
+Map(</p>
+
+<pre><code>"|" -&gt; 0, "||" -&gt; 0, 
+"&amp;" -&gt; 1, "&amp;&amp;" -&gt; 1, …
+</code></pre>
+
+<p>)
+```</p>
+
+<p>그러나 위 방법은 해당 부분에 대한 우선순위의  사전 계산이 많이 포함되므로, 그냥 상승하는 우선순위(increasing precedence)에 대한 연산자 그룹을 정의하고 이로부터 각 연산자의 우선순위를 계산하면 됨.</p>
+
+<p>``` scala
+// 상승하는 우선순위의 그룹에 연산자를 저장함</p>
+
+<p>private val opGroups =</p>
+
+<pre><code>Array(
+    Set("|", "||"),
+    Set("&amp;", "&amp;&amp;"),
+    Set("^"),
+    Set("==", "!="),
+    Set("&lt;", "&lt;=", "&gt;", "&gt;="),
+    Set("+", "-")
+    Set("*", "%")
+)
+</code></pre>
+
+<p>```</p>
+
+<p><code>precedence</code> 변수는 연산자와 그들의 우선순위에 대한 맵으로 0부터 시작하는 정수값인데 두 개의 생성자로부터 생성됨.</p>
+
+<p>``` scala
+private val precedence = {</p>
+
+<pre><code>val assocs =
+    for {
+        i &lt;- 0 until opGroups.length
+        op &lt;- opGroups(i)
+    } yield op -&gt; i
+    Map() ++ assocs
+}
+</code></pre>
+
+<p>```</p>
+
+<p>첫 번째 생성자는 <code>onGroups</code> 배열의 모든 인덱스 <code>i</code>를 만들고, 두 번째 생성자는 <code>opGroups(i)</code>의 모든 연산자 <code>op</code>를 만듦. for문의 각 연산자가 연산자 op와 그 인덱스 i의 조합을 만들기 때문에 배열에 있는 연산자들의 상대적 위치에 의해 그들의 우선순위가 결정됨.</p>
+
+<p>단항 연산자의 우선순위는 모든 이항 연산자보다 높으므로 <code>opGroup</code> 배열의 길이로 설정함. (곱하기, 나누기보다 하나 높은 값임)</p>
+
+<p><code>scala
+private val unaryPrecedence = opGroups.length
+</code></p>
+
+<p>분수 연산자의 우선순위는 수직 레이아웃에 사용되므로 약간 다르게 다룸. 특별한 놈이니 -1을 할당함.</p>
+
+<p><code>scala
+private val fractionPrecedence = -1
+</code></p>
+
+<p>이제 <code>format</code> 메소드를 작성하겠음. format  메소드는 Expr 타입의 <code>e</code>와 <code>e</code> 표현을 에워싸는(enclosing) 연산자의 우선순위의 값 <code>enclPrec</code> 두 개의 인자가 있음. 이 메소드는 2차원 문자열 배열의 레이아웃 요소(<code>elem</code>)를 반환함.</p>
+
+<p><code>stripDot</code>은 보조 메소드임, private <code>format</code> 메소드는 표현를 만들기 위한 대부분의 작업을 함. 같은 이름의 마지막 메소드 <code>format</code>은 라이브러리 내 단독 public 메소드로써 처리할 표현을 넘겨받음.</p>
+
+<p>``` scala
+private def format(e: Expr, enclPrec: Int): Element =</p>
+
+<pre><code>e match {
+    case Var(name) =&gt;
+        elem(name)
+
+    case Number(num) =&gt;
+        def stripDot(s: String) =
+            if (s endsWith ".0")    s.substring(0, s.length - 2)
+                else    s
+            elem(stripDot(num.toString))
+
+    case UnOp(op, arg) =&gt;
+        elem(op)    beside format (arg, unaryPrecedence)
+
+    case BinOp("/", left, right) =&gt;
+        val top = format(left, fractionPrecedence)
+        val bot = format(right, fractionPrecedence)
+        val line = elem('-', top.width max bot.width, 1)
+        val frac = top above line above bot
+        if (enclPrec != fractionPrecedence) frac
+            else elem(" ") beside frac beside elem(" ")
+
+    case BinOp(op, left, right) = &gt;
+        val opPrec = precendecn(op)
+        val l = format(left, opPrec)
+        val r = format(right, opPrec + 1)
+        val oper = l beside elem(" " + op + " ") beside r
+        if (enclPrec &lt;= opPrec) oper
+            else elem("(") beside oper beside elem(")")
+}
+
+def format(e: Expr): Element = format(e, 0)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>이하는 생략.</p>
+
+<h2>15.9 Conclusion</h2>
+
+<p>(생략)</p>
+
+<h2>The Mores</h2>
+
+<ul>
+<li><a href="http://booksites.artima.com/programming_in_scala/examples/html/ch15.html">15장 예제 소스</a></li>
+<li><a href="http://www.scala-lang.org/node/120">A Tour of Scala: Pattern Matching</a></li>
+<li><a href="http://www.artima.com/scalazine/articles/pattern_matching.html">The Point of Pattern Matching in Scala</a></li>
+<li><a href="http://scala-topics.org/scala-pattern-matching-a-case-for-new-thinking/">Scala pattern matching: A Case for new thinking?</a></li>
+<li><a href="http://eng.42go.com/pattern-matching-in-scala/">Pattern matching in Scala 2.10</a></li>
+<li><a href="http://dcsobral.blogspot.kr/2013/01/pattern-matching-on-abstract-types-with.html">pattern matching with abstract types with Scala 2.10</a></li>
+<li><a href="http://danielwestheide.com/blog/2012/12/12/the-neophytes-guide-to-scala-part-4-pattern-matching-anonymous-functions.html">Pattern Matching Anonymous Functions</a></li>
+<li><a href="http://www.ibm.com/developerworks/java/library/j-ft14/">Functional thinking: Either trees and pattern matching</a></li>
+<li><a href="http://kerflyn.wordpress.com/2011/02/14/playing-with-scalas-pattern-matching/">Playing with Scala&rsquo;s Pattern Matching</a></li>
+<li><a href="http://ikaisays.com/2009/04/04/using-pattern-matching-with-regular-expressions-in-scala/">Using pattern matching with regular expressions in Scala</a></li>
+<li><a href="http://www.codecommit.com/blog/scala/scala-for-java-refugees-part-4">Pattern Matching and Exceptions</a></li>
+<li><a href="http://notes.langdale.com.au/Querying_a_Dataset_with_Scala_s_Pattern_Matching.html">Querying a Dataset with Scala&rsquo;s Pattern Matching</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,669 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>한글 초성 검색 - Patrick Yoon</title>
+  <meta name="author" content="Patrick Yoon">
+
+  
+  <meta name="description" content="한글 초성 검색 모듈을 만들어보자. 검색 조건은 다음과 같다. 검색어는 최소 두 자리 이상 입력
+검색 결과는 매출이 가장 많은 순으로 정렬 시퀀스 다이어그램 아래는 전체 로직의 시퀀스 다이어그램이다. 보다시피, 검색 키워드와 도서명 초성 캐릭터 배열과 매칭 여부를 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://cluno.github.io/blog/2013/09/20/searching-initial-consonant">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Patrick Yoon" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href='http://fonts.googleapis.com/css?family=Quattrocento+Sans|Roboto:400,300' rel='stylesheet' type='text/css'>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-38934656-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+
+<body>
+	<div class="container">
+		<aside class="left">
+			<div class="inner-left">
+				<header>
+					
+  <img src="http://www.gravatar.com/avatar/13f231faa3760fc399725d9f6fb94ee2?s=200" alt="Gravatar of Patrick Yoon " title="Gravatar of Patrick Yoon" class="profilepic" />
+
+<hgroup>
+  <h1><a href="/">Patrick Yoon</a></h1>
+  
+    <h2 class="subtitle">Walking on the clouds</h2>
+   
+</hgroup>
+
+
+				</header>
+				<footer>
+					<p>
+	
+		<a href="http://github.com/cluno" class="btn btn-dark">GitHub</a>
+	
+	
+		<a href="http://twitter.com/theluno" class="btn btn-dark">Twitter</a>
+	
+</p>
+				</footer>
+			</div>
+		</aside>
+    	<section class="right">
+    		<div class="inner-right">
+    			<div id="posts">
+    			  	<article class="post">
+    
+  <header>
+    
+      <h1 class="entry-title">한글 초성 검색</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-09-20T19:45:00+09:00" pubdate data-updated="true">Sep 20<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>한글 초성 검색 모듈을 만들어보자.</p>
+
+<!-- more -->
+
+
+<p>검색 조건은 다음과 같다.</p>
+
+<ul>
+<li>검색어는 최소 두 자리 이상 입력</li>
+<li>검색 결과는 매출이 가장 많은 순으로 정렬</li>
+</ul>
+
+
+<h3>시퀀스 다이어그램</h3>
+
+<p>아래는 전체 로직의 시퀀스 다이어그램이다. 보다시피, 검색 키워드와  도서명 초성 캐릭터 배열과 매칭 여부를 판별하고, 매칭될 경우 그 결과를 도서명 리스트로 반환한다.</p>
+
+<p><img src="http://www.websequencediagrams.com/cgi-bin/cdraw?lz=TWV0aG9kcyBTZXF1ZW5jZQoKc2VhcmNoKCktPmRvUwAFBzoga2V5d29yZApub3RlIGxlZnQgb2YgABUM7JiIKSAn44WC44S5J-uhnCDqsoDsg4kg7Iuc7J6RCgBCCi0-aXNNYXQAUQZib29rLnRpdGxlLABaCQAWCS0-aW5pdGlhbENvbnNvbmFudCgpOiAAKQUAgQIGcmlnaACBBAUARwvrj4TshJzrqoXsl5DshJwg7LSI7ISxIOyDieyduCDstpTstpwKAEYSAIEJDWNoYXJbXQB9DACBfwx0cnVlIG9yIGZhbHNlAIFMDQCCMwg6IExpc3Q8Qm9vaz4gb3IgbnVsbACCTQtwcmkAgUUG6rKw6rO8IOy2nOugpQ&amp;s=rose" alt="" /></p>
+
+<h3>초성 배열</h3>
+
+<p>한글 소리 마디 (Hangul Syllables)에는 현대 한글에서 표현 가능한 11,172자를 모두 포함하고 있는데, 그 범위는 &lsquo;가&rsquo;(U+AC00)부터 &lsquo;힣&rsquo;(U+D7A3)까지이다. 그리고 초성은 19개, 중성은 21개, 종성은 28개로 이루어져 있다. 따라서, 한글 음절의 코드표로부터 시작 값인 U+AC00을 빼고, 이 값으로부터 (28x21)의 나눈 몫이 초성이 된다. (이상, <a href="http://helloworld.naver.com/helloworld/76650">참고</a>)</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>초성 인덱스 : (한글 코드값 - 0xAC00) / (28*21)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>구현하는 방법은 여러가지가 있겠지만 중성과 종성을 검색에서 제외시키고, 초성  캐릭터 배열만 구해서 검색어와 매칭하는 방법이 제일 간단하다. 다음은 주어진 문자열에서 초성 배열을 반환하는 메소드이다.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">* 주어진 문자열 전체에 해당하는 초성 캐릭터 배열을 반환한다. </span>
+</span><span class='line'><span class="cm">* 예, 도서명이 &quot;돈데 기리기리 돈데크만- Season[1]&quot;의 경우, &#39;ㄷㄷㄱㄹㄱㄹㄷㄷㅋㅁ&#39;.</span>
+</span><span class='line'><span class="cm">* </span>
+</span><span class='line'><span class="cm">* @param title 주어진 문자열</span>
+</span><span class='line'><span class="cm">* @return 초성 캐릭터 배열</span>
+</span><span class='line'><span class="cm">*/</span>
+</span><span class='line'><span class="kd">private</span> <span class="kt">char</span><span class="o">[]</span> <span class="nf">initialConsonant</span><span class="o">(</span><span class="n">String</span> <span class="n">str</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Guava의 CharMatcher를 이용해 문자열로부터 한글만 추출한다.</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">hangul</span> <span class="o">=</span> <span class="n">CharMatcher</span><span class="o">.</span><span class="na">inRange</span><span class="o">(</span><span class="mh">0xAC00</span><span class="o">,</span> <span class="mh">0xD79F</span><span class="o">).</span><span class="na">retainFrom</span><span class="o">(</span><span class="n">str</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">hangul</span><span class="o">.</span><span class="na">length</span><span class="o">();</span> <span class="c1">// 추출된 한글의 길이를 구한다. </span>
+</span><span class='line'>    <span class="kt">char</span> <span class="n">result</span><span class="o">[]</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="o">[</span><span class="n">len</span><span class="o">];</span> <span class="c1">// 한글 길이만큼의 캐릭터 배열을 생성한다.</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">len</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="kt">char</span> <span class="n">word</span> <span class="o">=</span> <span class="n">hangul</span><span class="o">.</span><span class="na">charAt</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+</span><span class='line'>        <span class="kt">int</span> <span class="n">index</span> <span class="o">=</span> <span class="o">(</span><span class="n">word</span> <span class="o">-</span> <span class="mh">0xAC00</span><span class="o">)</span>  <span class="o">/</span> <span class="o">(</span><span class="mi">28</span> <span class="o">*</span> <span class="mi">21</span><span class="o">);</span>
+</span><span class='line'>        <span class="n">result</span><span class="o">[</span><span class="n">i</span><span class="o">]</span> <span class="o">=</span> <span class="n">INITIALS</span><span class="o">[</span><span class="n">index</span><span class="o">];</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>검색 키워드 매칭</h3>
+
+<p>매칭 여부는 초성 캐릭터 배열과 검색어 캐릭터 배열를 비교한다.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">* 주어진 문자열과 주어진 검색 키워드가 매칭하는지의 여부를 반환한다. </span>
+</span><span class='line'><span class="cm">* </span>
+</span><span class='line'><span class="cm">* @param title 문자열</span>
+</span><span class='line'><span class="cm">* @param keyword 검색 키워드</span>
+</span><span class='line'><span class="cm">* @return 매칭 여부</span>
+</span><span class='line'><span class="cm">*/</span>
+</span><span class='line'><span class="kd">private</span> <span class="kt">boolean</span> <span class="nf">isMatch</span><span class="o">(</span><span class="n">String</span> <span class="n">title</span><span class="o">,</span> <span class="n">String</span> <span class="n">keyword</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>  <span class="kt">char</span><span class="o">[]</span> <span class="n">initials</span> <span class="o">=</span> <span class="n">initialConsonant</span><span class="o">(</span><span class="n">title</span><span class="o">);</span>  <span class="c1">// 도서명의 초성 캐릭터 배열을 반환</span>
+</span><span class='line'>  <span class="kt">char</span><span class="o">[]</span> <span class="n">keys</span> <span class="o">=</span> <span class="n">keyword</span><span class="o">.</span><span class="na">toCharArray</span><span class="o">();</span>    <span class="c1">// 검색 키워드를 캐릭터 배열로 반환</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span><span class="o">(</span><span class="n">keys</span><span class="o">.</span><span class="na">length</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">||</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span> <span class="c1">// 검색 키워드 유효성 체크</span>
+</span><span class='line'>    <span class="k">return</span> <span class="kc">false</span><span class="o">;</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">initials</span><span class="o">.</span><span class="na">length</span> <span class="o">-</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="c1">// 키워드의 길이만큼만 매칭</span>
+</span><span class='line'>  <span class="kt">int</span> <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>  <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">len</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="n">offset</span><span class="o">;</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">j</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="c1">// 초성 캐릭터 배열과 검색어 캐릭터 배열의 값을 하나씩 비교함</span>
+</span><span class='line'>      <span class="k">if</span><span class="o">(</span><span class="n">initials</span><span class="o">[</span><span class="n">i</span> <span class="o">+</span> <span class="n">offset</span><span class="o">]</span> <span class="o">==</span> <span class="n">keys</span><span class="o">[</span><span class="n">j</span><span class="o">])</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">offset</span><span class="o">++;</span>     <span class="c1">// 매칭될 경우 오프셋의 위치를 증가</span>
+</span><span class='line'>      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>   <span class="c1">// 매칭되지 않으면, 오프셋의 위치를 초기화</span>
+</span><span class='line'>        <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// 매칭된 개수와 키워드의 길이가 같을 경우, 매칭하는 것으로 판별</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">offset</span> <span class="o">==</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>전체 코드</h3>
+
+<p>이상 전체 코드는 다음과 같다. 편의상 Guava 라이브러리를 사용하였다. 입력 데이터는 data.csv 파일로 받는다.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+<span class='line-number'>99</span>
+<span class='line-number'>100</span>
+<span class='line-number'>101</span>
+<span class='line-number'>102</span>
+<span class='line-number'>103</span>
+<span class='line-number'>104</span>
+<span class='line-number'>105</span>
+<span class='line-number'>106</span>
+<span class='line-number'>107</span>
+<span class='line-number'>108</span>
+<span class='line-number'>109</span>
+<span class='line-number'>110</span>
+<span class='line-number'>111</span>
+<span class='line-number'>112</span>
+<span class='line-number'>113</span>
+<span class='line-number'>114</span>
+<span class='line-number'>115</span>
+<span class='line-number'>116</span>
+<span class='line-number'>117</span>
+<span class='line-number'>118</span>
+<span class='line-number'>119</span>
+<span class='line-number'>120</span>
+<span class='line-number'>121</span>
+<span class='line-number'>122</span>
+<span class='line-number'>123</span>
+<span class='line-number'>124</span>
+<span class='line-number'>125</span>
+<span class='line-number'>126</span>
+<span class='line-number'>127</span>
+<span class='line-number'>128</span>
+<span class='line-number'>129</span>
+<span class='line-number'>130</span>
+<span class='line-number'>131</span>
+<span class='line-number'>132</span>
+<span class='line-number'>133</span>
+<span class='line-number'>134</span>
+<span class='line-number'>135</span>
+<span class='line-number'>136</span>
+<span class='line-number'>137</span>
+<span class='line-number'>138</span>
+<span class='line-number'>139</span>
+<span class='line-number'>140</span>
+<span class='line-number'>141</span>
+<span class='line-number'>142</span>
+<span class='line-number'>143</span>
+<span class='line-number'>144</span>
+<span class='line-number'>145</span>
+<span class='line-number'>146</span>
+<span class='line-number'>147</span>
+<span class='line-number'>148</span>
+<span class='line-number'>149</span>
+<span class='line-number'>150</span>
+<span class='line-number'>151</span>
+<span class='line-number'>152</span>
+<span class='line-number'>153</span>
+<span class='line-number'>154</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">import</span> <span class="nn">java.io.File</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">java.util.Collections</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">java.util.Comparator</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">java.util.List</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">com.google.common.base.CharMatcher</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">com.google.common.base.Charsets</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">com.google.common.base.Splitter</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">com.google.common.collect.Lists</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">com.google.common.io.Files</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">SimpleSearcher</span> <span class="o">{</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">char</span> <span class="n">INITIALS</span><span class="o">[]</span> <span class="o">=</span> <span class="s">&quot;ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ&quot;</span><span class="o">.</span><span class="na">toCharArray</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Book</span><span class="o">&gt;</span> <span class="n">books</span> <span class="o">=</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="nf">SimpleSearcher</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">loadItems</span><span class="o">();</span> <span class="c1">// data.csv 파일로부터 도서 데이터를 읽어온다.</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">search</span><span class="o">(</span><span class="n">String</span> <span class="n">keyword</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">print</span><span class="o">(</span><span class="n">doSearch</span><span class="o">(</span><span class="n">keyword</span><span class="o">));</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Book</span><span class="o">&gt;</span> <span class="nf">doSearch</span><span class="o">(</span><span class="n">String</span> <span class="n">keyword</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">List</span><span class="o">&lt;</span><span class="n">Book</span><span class="o">&gt;</span> <span class="n">matched</span> <span class="o">=</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="n">Book</span> <span class="nl">book:</span> <span class="n">books</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">if</span><span class="o">(</span><span class="n">isMatch</span><span class="o">(</span><span class="n">book</span><span class="o">.</span><span class="na">title</span><span class="o">,</span> <span class="n">keyword</span><span class="o">))</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">matched</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">book</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// 판매량을 기준으로 정렬한다.</span>
+</span><span class='line'>    <span class="n">Collections</span><span class="o">.</span><span class="na">sort</span><span class="o">(</span><span class="n">matched</span><span class="o">,</span> <span class="k">new</span> <span class="n">Comparator</span><span class="o">&lt;</span><span class="n">Book</span><span class="o">&gt;()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span> <span class="kd">public</span> <span class="kt">int</span> <span class="n">compare</span><span class="o">(</span><span class="n">Book</span> <span class="n">a</span><span class="o">,</span> <span class="n">Book</span> <span class="n">b</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="kt">int</span> <span class="n">p1</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="na">getTotal</span><span class="o">();</span>
+</span><span class='line'>        <span class="kt">int</span> <span class="n">p2</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="na">getTotal</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">if</span><span class="o">(</span><span class="n">p1</span> <span class="o">==</span> <span class="n">p2</span><span class="o">)</span> <span class="k">return</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">return</span> <span class="n">p1</span> <span class="o">&gt;</span> <span class="n">p2</span> <span class="o">?</span> <span class="o">-</span><span class="mi">1</span> <span class="o">:</span> <span class="mi">1</span><span class="o">;</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">matched</span><span class="o">;</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">   * 주어진 문자열과 주어진 검색 키워드가 매칭하는지의 여부를 반환한다. </span>
+</span><span class='line'><span class="cm">   * </span>
+</span><span class='line'><span class="cm">   * @param title 문자열</span>
+</span><span class='line'><span class="cm">   * @param keyword 검색 키워드</span>
+</span><span class='line'><span class="cm">   * @return 매칭 여부</span>
+</span><span class='line'><span class="cm">   */</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kt">boolean</span> <span class="nf">isMatch</span><span class="o">(</span><span class="n">String</span> <span class="n">title</span><span class="o">,</span> <span class="n">String</span> <span class="n">keyword</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kt">char</span><span class="o">[]</span> <span class="n">initials</span> <span class="o">=</span> <span class="n">initialConsonant</span><span class="o">(</span><span class="n">title</span><span class="o">);</span>  <span class="c1">// 도서명의 초성 캐릭터 배열을 반환</span>
+</span><span class='line'>    <span class="kt">char</span><span class="o">[]</span> <span class="n">keys</span> <span class="o">=</span> <span class="n">keyword</span><span class="o">.</span><span class="na">toCharArray</span><span class="o">();</span>    <span class="c1">// 검색 키워드를 캐릭터 배열로 반환</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">keys</span><span class="o">.</span><span class="na">length</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">||</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span> <span class="c1">// 검색 키워드 유효성 체크</span>
+</span><span class='line'>      <span class="k">return</span> <span class="kc">false</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">initials</span><span class="o">.</span><span class="na">length</span> <span class="o">-</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="c1">// 키워드의 길이만큼만 매칭</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">len</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="n">offset</span><span class="o">;</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">j</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="c1">// 초성 캐릭터 배열과 검색어 캐릭터 배열의 값을 하나씩 비교함</span>
+</span><span class='line'>        <span class="k">if</span><span class="o">(</span><span class="n">initials</span><span class="o">[</span><span class="n">i</span> <span class="o">+</span> <span class="n">offset</span><span class="o">]</span> <span class="o">==</span> <span class="n">keys</span><span class="o">[</span><span class="n">j</span><span class="o">])</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">offset</span><span class="o">++;</span>     <span class="c1">// 매칭될 경우 오프셋의 위치를 증가</span>
+</span><span class='line'>        <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>   <span class="c1">// 매칭되지 않으면, 오프셋의 위치를 초기화</span>
+</span><span class='line'>          <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// 매칭된 개수와 키워드의 길이가 같을 경우, 매칭하는 것으로 판별</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">offset</span> <span class="o">==</span> <span class="n">keys</span><span class="o">.</span><span class="na">length</span><span class="o">;</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">   * 주어진 문자열 전체에 해당하는 초성 캐릭터 배열(색인)을 반환한다. </span>
+</span><span class='line'><span class="cm">   * 예, 도서명이 &quot;돈데 기리기리 돈데크만- Season[1]&quot;의 경우, &#39;ㄷㄷㄱㄹㄱㄹㄷㄷㅋㅁ&#39;.</span>
+</span><span class='line'><span class="cm">   * </span>
+</span><span class='line'><span class="cm">   * @param title 주어진 문자열</span>
+</span><span class='line'><span class="cm">   * @return 초성 캐릭터 배열</span>
+</span><span class='line'><span class="cm">   */</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kt">char</span><span class="o">[]</span> <span class="nf">initialConsonant</span><span class="o">(</span><span class="n">String</span> <span class="n">str</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Guava의 CharMatcher를 이용해 문자열로부터 한글만 추출한다.</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">hangul</span> <span class="o">=</span> <span class="n">CharMatcher</span><span class="o">.</span><span class="na">inRange</span><span class="o">(</span><span class="mh">0xAC00</span><span class="o">,</span> <span class="mh">0xD79F</span><span class="o">).</span><span class="na">retainFrom</span><span class="o">(</span><span class="n">str</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">hangul</span><span class="o">.</span><span class="na">length</span><span class="o">();</span> <span class="c1">// 추출된 한글의 길이를 구한다. </span>
+</span><span class='line'>    <span class="kt">char</span> <span class="n">result</span><span class="o">[]</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="o">[</span><span class="n">len</span><span class="o">];</span> <span class="c1">// 한글 길이만큼의 캐릭터 배열을 생성한다.</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">len</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kt">char</span> <span class="n">word</span> <span class="o">=</span> <span class="n">hangul</span><span class="o">.</span><span class="na">charAt</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+</span><span class='line'>      <span class="kt">int</span> <span class="n">index</span> <span class="o">=</span> <span class="o">(</span><span class="n">word</span> <span class="o">-</span> <span class="mh">0xAC00</span><span class="o">)</span>  <span class="o">/</span> <span class="o">(</span><span class="mi">28</span> <span class="o">*</span> <span class="mi">21</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">result</span><span class="o">[</span><span class="n">i</span><span class="o">]</span> <span class="o">=</span> <span class="n">INITIALS</span><span class="o">[</span><span class="n">index</span><span class="o">];</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">private</span> <span class="kt">void</span> <span class="nf">print</span><span class="o">(</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Book</span><span class="o">&gt;</span> <span class="n">books</span><span class="o">){</span>
+</span><span class='line'>    <span class="k">for</span><span class="o">(</span><span class="n">Book</span> <span class="nl">book:</span> <span class="n">books</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;도서명:&quot;</span> <span class="o">+</span> <span class="n">book</span><span class="o">.</span><span class="na">title</span> <span class="o">+</span> <span class="s">&quot; 가격: &quot;</span> <span class="o">+</span> <span class="n">book</span><span class="o">.</span><span class="na">getTotal</span><span class="o">());</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">   * 파일(data.csv)에서 도서정보를 읽어온다.</span>
+</span><span class='line'><span class="cm">   * 별도의 오류처리를 하지 않고 메인쓰레드로 날린다.</span>
+</span><span class='line'><span class="cm">   *</span>
+</span><span class='line'><span class="cm">   * @throws Exception 파일입출력 오류</span>
+</span><span class='line'><span class="cm">   */</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kt">void</span> <span class="nf">loadItems</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kd">final</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">lines</span> <span class="o">=</span> <span class="n">Files</span><span class="o">.</span><span class="na">readLines</span><span class="o">(</span><span class="k">new</span> <span class="n">File</span><span class="o">(</span><span class="s">&quot;data.csv&quot;</span><span class="o">),</span> <span class="n">Charsets</span><span class="o">.</span><span class="na">UTF_8</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">Splitter</span> <span class="n">splitter</span> <span class="o">=</span> <span class="n">Splitter</span><span class="o">.</span><span class="na">on</span><span class="o">(</span><span class="sc">&#39;,&#39;</span><span class="o">).</span><span class="na">omitEmptyStrings</span><span class="o">().</span><span class="na">trimResults</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="o">(</span><span class="n">String</span> <span class="n">line</span> <span class="o">:</span> <span class="n">lines</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">if</span><span class="o">(</span><span class="n">line</span><span class="o">.</span><span class="na">trim</span><span class="o">().</span><span class="na">length</span><span class="o">()</span> <span class="o">==</span> <span class="mi">0</span><span class="o">)</span> <span class="k">continue</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">spliter</span> <span class="o">=</span> <span class="n">splitter</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="n">line</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">v</span> <span class="o">=</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="n">spliter</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">Book</span> <span class="n">book</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Book</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">book</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">book</span><span class="o">.</span><span class="na">title</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">book</span><span class="o">.</span><span class="na">price</span> <span class="o">=</span> <span class="n">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">v</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">2</span><span class="o">));</span>
+</span><span class='line'>      <span class="n">book</span><span class="o">.</span><span class="na">sales</span> <span class="o">=</span> <span class="n">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">v</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">3</span><span class="o">));</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">books</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">book</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">...</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">SimpleSearcher</span> <span class="n">app</span> <span class="o">=</span> <span class="k">new</span> <span class="n">SimpleSearcher</span><span class="o">();</span>
+</span><span class='line'>    <span class="n">app</span><span class="o">.</span><span class="na">search</span><span class="o">(</span><span class="s">&quot;ㄷㄷㅋ&quot;</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">class</span> <span class="nc">Book</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">id</span><span class="o">;</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">title</span><span class="o">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">price</span><span class="o">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">sales</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kd">public</span> <span class="kt">int</span> <span class="nf">getTotal</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">if</span><span class="o">(</span><span class="n">sales</span> <span class="o">==</span> <span class="mi">0</span><span class="o">)</span> <span class="k">return</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>      <span class="k">return</span> <span class="n">price</span> <span class="o">*</span> <span class="n">sales</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+
+
+</article>
+
+
+        <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://cluno.github.io/blog/2013/09/20/searching-initial-consonant/" data-via="theluno" data-counturl="http://cluno.github.io/blog/2013/09/20/searching-initial-consonant/" >Tweet</a>
+  
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+
+
+
+<section id="comments">
+    <div id="disqus_thread"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+</section>
+
+
+    			</div>
+    			<footer id="footer">
+    				<p class="credit">
+  Copyright &copy; 2014 - Patrick Yoon. Powered by <a href="http://octopress.org">Octopress</a>
+</p>
+
+
+    			</footer>
+    			
+
+<script type="text/javascript">
+      var disqus_shortname = 'theluno';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://cluno.github.io/blog/2013/09/20/searching-initial-consonant/';
+        var disqus_url = 'http://cluno.github.io/blog/2013/09/20/searching-initial-consonant/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+<link href='http://fonts.googleapis.com/css?family=Quattrocento+Sans|Roboto:400,300' rel='stylesheet' type='text/css'>
+
+
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-38934656-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+
+
+    		</div>
+    	</section>
+  	</div>
+</body>
+</html>
